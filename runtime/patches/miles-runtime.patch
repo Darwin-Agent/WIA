@@ -1,0 +1,722 @@
+diff --git a/miles/backends/megatron_utils/arguments.py b/miles/backends/megatron_utils/arguments.py
+index 0347d09a..2bb858d5 100644
+--- a/miles/backends/megatron_utils/arguments.py
++++ b/miles/backends/megatron_utils/arguments.py
+@@ -1,7 +1,10 @@
+ import logging
+ import os
+ 
+-from megatron.core.tokenizers.utils.build_tokenizer import vocab_size_with_padding as _vocab_size_with_padding
++try:
++    from megatron.core.tokenizers.utils.build_tokenizer import vocab_size_with_padding as _vocab_size_with_padding
++except ImportError:
++    from megatron.training.tokenizer.tokenizer import _vocab_size_with_padding
+ from megatron.training.arguments import parse_args, validate_args
+ 
+ __all__ = ["validate_args", "parse_args", "set_default_megatron_args"]
+diff --git a/miles/backends/megatron_utils/bridge_lora_helpers.py b/miles/backends/megatron_utils/bridge_lora_helpers.py
+index b0746cc7..2ad0f4a3 100644
+--- a/miles/backends/megatron_utils/bridge_lora_helpers.py
++++ b/miles/backends/megatron_utils/bridge_lora_helpers.py
+@@ -33,6 +33,22 @@ def _ensure_model_list(model):
+     return model if isinstance(model, list) else [model]
+ 
+ 
++def _logits_only_forward_hook(model_chunks):
++    """Keep only logits for bridge models whose forward returns extra outputs."""
++
++    model_list = _ensure_model_list(model_chunks)
++    for model_chunk in model_list:
++        _bridge_forward = model_chunk.forward
++
++        def _logits_only_forward(*args, _bridge_forward=_bridge_forward, **kwargs):
++            out = _bridge_forward(*args, **kwargs)
++            return out[0] if isinstance(out, tuple) else out
++
++        model_chunk.forward = _logits_only_forward
++
++    return model_list
++
++
+ def _make_value_model_hook(hidden_size: int, sequence_parallel: bool):
+     """Create a pre-wrap hook that replaces the output layer with a value head."""
+     from megatron.core import parallel_state
+@@ -163,6 +179,8 @@ def _setup_lora_model_via_bridge(args: Namespace) -> list:
+         provider.num_layers_in_last_pipeline_stage = args.decoder_last_pipeline_num_layers
+     if hasattr(provider, "dsa_attention_backend"):
+         provider.dsa_attention_backend = getattr(args, "dsa_attention_backend", "megatron")
++    if not getattr(args, "enable_mtp_training", False) and hasattr(provider, "mtp_num_layers"):
++        provider.mtp_num_layers = None
+     provider.finalize()
+ 
+     if is_multi_lora_enabled(args):
+@@ -182,6 +200,7 @@ def _setup_lora_model_via_bridge(args: Namespace) -> list:
+         return transformed
+ 
+     provider.register_pre_wrap_hook(apply_lora_hook)
++    provider.register_pre_wrap_hook(_logits_only_forward_hook)
+ 
+     is_value_model = (
+         "ForTokenClassification" in hf_config.architectures[0]
+diff --git a/miles/backends/megatron_utils/hf_export.py b/miles/backends/megatron_utils/hf_export.py
+index 67201c78..03777c57 100644
+--- a/miles/backends/megatron_utils/hf_export.py
++++ b/miles/backends/megatron_utils/hf_export.py
+@@ -9,6 +9,7 @@ Everything here is collective: all ranks must call it, global rank 0 writes.
+ 
+ import json
+ import logging
++import os
+ import shutil
+ from collections.abc import Sequence
+ from functools import cache
+@@ -17,6 +18,7 @@ from pathlib import Path
+ import safetensors.torch
+ import torch
+ from megatron.core.distributed import DistributedDataParallel as DDP
++from safetensors import safe_open
+ 
+ from miles.backends.megatron_utils.lora_utils import is_lora_model, save_lora_checkpoint
+ from miles.backends.megatron_utils.update_weight.common import named_params_and_buffers
+@@ -37,6 +39,30 @@ def _is_hf_metadata_file(path: Path) -> bool:
+     return path.is_file() and path.suffix not in HF_WEIGHT_SUFFIXES and not path.name.endswith(".index.json")
+ 
+ 
++def _validate_hf_export(path: Path) -> None:
++    """Reject incomplete HF exports before writing the completion marker."""
++    index_path = path / "model.safetensors.index.json"
++    if index_path.is_file():
++        index = json.loads(index_path.read_text())
++        weight_map = index.get("weight_map")
++        if not isinstance(weight_map, dict) or not weight_map:
++            raise RuntimeError(f"HF export to {path} has an invalid or empty weight index")
++        missing = sorted({str(name) for name in weight_map.values() if not (path / name).is_file()})
++        if missing:
++            raise RuntimeError(f"HF export to {path} is incomplete; missing shard(s): {missing}")
++        shard_keys: dict[str, set[str]] = {}
++        for shard_name in set(weight_map.values()):
++            with safe_open(str(path / shard_name), framework="pt") as shard:
++                shard_keys[shard_name] = set(shard.keys())
++        absent = sorted(name for name, shard_name in weight_map.items() if name not in shard_keys[shard_name])
++        if absent:
++            raise RuntimeError(f"HF export to {path} has index entries absent from shards: {absent[:8]}")
++        return
++
++    if not any(path.glob("*.safetensors")) and not any(path.glob("*.bin")):
++        raise RuntimeError(f"HF export to {path} produced no weight files")
++
++
+ def export_hf_model_direct(
+     args,
+     model: Sequence[DDP],
+@@ -64,6 +90,7 @@ def export_hf_model_direct(
+     weight_map: dict[str, str] = {}
+     total_size = 0
+     shard_index = 0
++    embed_tokens_tensor = None
+     for hf_named_tensors in iterator.get_hf_weight_chunks(megatron_local_weights):
+         if not is_writer:
+             continue
+@@ -71,12 +98,28 @@ def export_hf_model_direct(
+         shard_name = f"model-{shard_index:05d}.safetensors"
+         shard_tensors = {}
+         for name, tensor in hf_named_tensors:
+-            shard_tensors[name] = tensor.detach().to("cpu").contiguous()
++            if name in weight_map or name in shard_tensors:
++                raise RuntimeError(f"HF export to {path} produced duplicate weight name: {name}")
++            exported_tensor = tensor.detach().to("cpu").contiguous()
++            if name == "lm_head.weight":
++                exported_tensor = exported_tensor.clone()
++            shard_tensors[name] = exported_tensor
++            if name == "model.language_model.embed_tokens.weight":
++                embed_tokens_tensor = shard_tensors[name]
+             weight_map[name] = shard_name
+             total_size += shard_tensors[name].numel() * shard_tensors[name].element_size()
+         safetensors.torch.save_file(shard_tensors, path / shard_name)
+         del shard_tensors
+ 
++    if is_writer and "qwen3_5" in model_name.lower() and "lm_head.weight" not in weight_map:
++        if embed_tokens_tensor is None:
++            raise RuntimeError("Qwen3.5 export is missing both lm_head.weight and embed_tokens.weight")
++        shard_index += 1
++        shard_name = f"model-{shard_index:05d}.safetensors"
++        safetensors.torch.save_file({"lm_head.weight": embed_tokens_tensor}, path / shard_name)
++        weight_map["lm_head.weight"] = shard_name
++        total_size += embed_tokens_tensor.numel() * embed_tokens_tensor.element_size()
++
+     try:
+         if is_writer:
+             assert weight_map, f"HF export to {path} produced no weights"
+@@ -135,7 +178,8 @@ def save_hf_model(
+         if should_log:
+             logger.info(f"Saving model in HuggingFace format to {path}")
+ 
+-        if args.megatron_to_hf_mode == "raw" and not is_lora_model(model):
++        export_mode = os.environ.get("MILES_HF_EXPORT_MODE", args.megatron_to_hf_mode)
++        if export_mode == "raw" and not is_lora_model(model):
+             # LoRA keeps the bridge (adapter merging).
+             hf_config = load_hf_config(args.hf_checkpoint)
+             export_hf_model_direct(
+@@ -164,6 +208,9 @@ def save_hf_model(
+                         f"bridge likely has no mapping for this model architecture."
+                     )
+ 
++        if torch.distributed.get_rank() == 0:
++            _validate_hf_export(path)
++
+         if should_log:
+             logger.info(f"Successfully saved merged HuggingFace model to {path}")
+     except Exception as e:
+diff --git a/miles/backends/megatron_utils/megatron_to_hf/qwen3_5.py b/miles/backends/megatron_utils/megatron_to_hf/qwen3_5.py
+index 70d155f7..3367dc8b 100644
+--- a/miles/backends/megatron_utils/megatron_to_hf/qwen3_5.py
++++ b/miles/backends/megatron_utils/megatron_to_hf/qwen3_5.py
+@@ -51,20 +51,70 @@ def convert_qwen3_5_to_hf(args, name, param):
+         if result is not None:
+             return result
+ 
+-    if name == "module.module.embedding.word_embeddings.weight":
++    if name in {
++        "module.module.embedding.word_embeddings.weight",
++        "module.module.language_model.embedding.word_embeddings.weight",
++    }:
+         return [("model.language_model.embed_tokens.weight", param)]
+-    if name == "module.module.output_layer.weight":
++    if name in {
++        "module.module.output_layer.weight",
++        "module.module.language_model.output_layer.weight",
++    }:
+         return [("lm_head.weight", param)]
+-    if name == "module.module.decoder.final_layernorm.weight":
++    if name in {
++        "module.module.decoder.final_layernorm.weight",
++        "module.module.language_model.decoder.final_layernorm.weight",
++    }:
+         return [("model.language_model.norm.weight", param)]
+ 
++    vision_prefix = "module.module.vision_model."
++    if name == f"{vision_prefix}patch_embed.proj.weight":
++        return [("model.visual.patch_embed.proj.weight", param)]
++    if name == f"{vision_prefix}patch_embed.proj.bias":
++        return [("model.visual.patch_embed.proj.bias", param)]
++    if name == f"{vision_prefix}pos_embed.weight":
++        return [("model.visual.pos_embed.weight", param)]
++    if name == f"{vision_prefix}merger.patch_norm.weight":
++        return [("model.visual.merger.norm.weight", param)]
++    if name == f"{vision_prefix}merger.patch_norm.bias":
++        return [("model.visual.merger.norm.bias", param)]
++    if name.startswith(f"{vision_prefix}merger.linear_fc1."):
++        suffix = name.removeprefix(f"{vision_prefix}merger.linear_fc1.")
++        return [(f"model.visual.merger.linear_fc1.{suffix}", param)]
++    if name.startswith(f"{vision_prefix}merger.linear_fc2."):
++        suffix = name.removeprefix(f"{vision_prefix}merger.linear_fc2.")
++        return [(f"model.visual.merger.linear_fc2.{suffix}", param)]
++
++    vision_layer_pattern = r"module\.module\.vision_model\.decoder\.layers\.(\d+)\.(.+)"
++    vision_match = re.match(vision_layer_pattern, name)
++    if vision_match:
++        layer_idx, rest = vision_match.groups()
++        prefix = f"model.visual.blocks.{layer_idx}"
++        vision_mappings = {
++            "self_attention.linear_qkv.weight": f"{prefix}.attn.qkv.weight",
++            "self_attention.linear_qkv.bias": f"{prefix}.attn.qkv.bias",
++            "self_attention.linear_proj.weight": f"{prefix}.attn.proj.weight",
++            "self_attention.linear_proj.bias": f"{prefix}.attn.proj.bias",
++            "self_attention.linear_qkv.layer_norm_weight": f"{prefix}.norm1.weight",
++            "self_attention.linear_qkv.layer_norm_bias": f"{prefix}.norm1.bias",
++            "mlp.linear_fc1.weight": f"{prefix}.mlp.linear_fc1.weight",
++            "mlp.linear_fc1.bias": f"{prefix}.mlp.linear_fc1.bias",
++            "mlp.linear_fc1.layer_norm_weight": f"{prefix}.norm2.weight",
++            "mlp.linear_fc1.layer_norm_bias": f"{prefix}.norm2.bias",
++            "mlp.linear_fc2.weight": f"{prefix}.mlp.linear_fc2.weight",
++            "mlp.linear_fc2.bias": f"{prefix}.mlp.linear_fc2.bias",
++        }
++        if rest in vision_mappings:
++            return [(vision_mappings[rest], param)]
++        raise ValueError(f"Unknown vision parameter name: {name}")
++
+     try:
+         head_dim = args.kv_channels if args.kv_channels is not None else args.hidden_size // args.num_attention_heads
+     except AttributeError:
+         head_dim = args.hidden_size // args.num_attention_heads
+     value_num_per_group = args.num_attention_heads // args.num_query_groups
+ 
+-    decoder_layers_pattern = r"module\.module\.decoder\.layers\.(\d+)\.(.+)"
++    decoder_layers_pattern = r"module\.module\.(?:language_model\.)?decoder\.layers\.(\d+)\.(.+)"
+     match = re.match(decoder_layers_pattern, name)
+     if match:
+         layer_idx, rest = match.groups()
+@@ -112,6 +162,29 @@ def convert_qwen3_5_to_hf(args, name, param):
+ 
+         if rest == "self_attention.linear_proj.weight":
+             return [(f"{prefix}.self_attn.o_proj.weight", param)]
++        elif rest == "self_attention.in_proj.weight":
++            key_head_dim = getattr(args, "linear_key_head_dim", 128)
++            value_head_dim = getattr(args, "linear_value_head_dim", 128)
++            num_key_heads = getattr(args, "linear_num_key_heads", 16)
++            num_value_heads = getattr(args, "linear_num_value_heads", 32)
++            qk_dim = num_key_heads * key_head_dim
++            value_dim = num_value_heads * value_head_dim
++            gate_dim = num_value_heads
++            split_sizes = [qk_dim, qk_dim, value_dim, value_dim, gate_dim, gate_dim]
++            if param.shape[0] != sum(split_sizes):
++                raise ValueError(
++                    f"Unexpected Qwen3.5 in_proj output dimension for {name}: "
++                    f"got {param.shape[0]}, expected {sum(split_sizes)}"
++                )
++            q_param, k_param, v_param, z_param, beta_param, alpha_param = torch.split(
++                param, split_sizes, dim=0
++            )
++            return [
++                (f"{prefix}.linear_attn.in_proj_qkv.weight", torch.cat([q_param, k_param, v_param], dim=0)),
++                (f"{prefix}.linear_attn.in_proj_z.weight", z_param),
++                (f"{prefix}.linear_attn.in_proj_b.weight", beta_param),
++                (f"{prefix}.linear_attn.in_proj_a.weight", alpha_param),
++            ]
+         elif rest == "self_attention.linear_qkv.weight":
+             param = param.view(args.num_query_groups, -1, head_dim, args.hidden_size)
+             q_param, k_param, v_param = torch.split(
+@@ -154,6 +227,8 @@ def convert_qwen3_5_to_hf(args, name, param):
+             return [(f"{prefix}.mlp.down_proj.weight", param)]
+         elif rest == "self_attention.linear_qkv.layer_norm_weight":
+             return [(f"{prefix}.input_layernorm.weight", param)]
++        elif rest == "self_attention.in_proj.layer_norm_weight":
++            return [(f"{prefix}.input_layernorm.weight", param)]
+         elif rest == "mlp.linear_fc1.layer_norm_weight":
+             return [(f"{prefix}.post_attention_layernorm.weight", param)]
+         elif rest == "pre_mlp_layernorm.weight":
+@@ -168,6 +243,20 @@ def convert_qwen3_5_to_hf(args, name, param):
+             return [(f"{prefix}.self_attn.q_norm.weight", param)]
+         elif rest == "self_attention.k_layernorm.weight":
+             return [(f"{prefix}.self_attn.k_norm.weight", param)]
++        elif rest == "self_attention.out_norm.weight":
++            return [(f"{prefix}.linear_attn.norm.weight", param + 1)]
++        elif rest in {
++            "self_attention.A_log",
++            "self_attention.conv1d.weight",
++            "self_attention.dt_bias",
++            "self_attention.in_proj_a.weight",
++            "self_attention.in_proj_b.weight",
++            "self_attention.in_proj_qkv.weight",
++            "self_attention.in_proj_z.weight",
++            "self_attention.out_proj.weight",
++        }:
++            target_name = rest[len("self_attention.") :]
++            return [(f"{prefix}.linear_attn.{target_name}", param)]
+         elif rest.startswith("self_attention.") and rest[len("self_attention.") :] in [
+             "input_layernorm.weight",
+             # linear attn (Qwen3.5 uses separate in_proj_b/in_proj_a)
+diff --git a/miles/backends/megatron_utils/model.py b/miles/backends/megatron_utils/model.py
+index bd526e76..3cc38fb6 100644
+--- a/miles/backends/megatron_utils/model.py
++++ b/miles/backends/megatron_utils/model.py
+@@ -981,8 +981,10 @@ def initialize_model_and_optimizer(
+     check_model_hashes(args, model, iteration)
+ 
+     # Megatron checkpoint loads can restore scheduler state directly. In that
+-    # case, stepping by the checkpoint iteration here would double-count.
+-    if opt_param_scheduler is not None and not (args.use_checkpoint_opt_param_scheduler and iteration > 0):
++    # case, load_state_dict() has already advanced ``num_steps``, so stepping
++    # by the checkpoint iteration here would double-count. Only advance the
++    # scheduler when the checkpoint did not restore its state.
++    if opt_param_scheduler is not None and opt_param_scheduler.num_steps == 0:
+         opt_param_scheduler.step(increment=iteration * args.global_batch_size)
+ 
+     return model, optimizer, opt_param_scheduler, iteration
+diff --git a/miles/backends/megatron_utils/model_provider.py b/miles/backends/megatron_utils/model_provider.py
+index 6fc43f17..f4e9d4f8 100644
+--- a/miles/backends/megatron_utils/model_provider.py
++++ b/miles/backends/megatron_utils/model_provider.py
+@@ -49,6 +49,12 @@ def _apply_bridge_runtime_config(provider, args: argparse.Namespace) -> None:
+     provider.calculate_per_token_loss = args.calculate_per_token_loss  # CP>1 VL models assert this
+     provider.variable_seq_lengths = args.variable_seq_lengths
+ 
++    # MTP is opt-in for RL. Bridge providers auto-detect MTP from the HF config,
++    # so without this the MTP head/loss is built even when --enable-mtp-training
++    # is not passed (and `process_mtp_loss` materializes a full-vocab logits).
++    if not getattr(args, "enable_mtp_training", False) and hasattr(provider, "mtp_num_layers"):
++        provider.mtp_num_layers = None
++
+     # numerics (training infra, not model-defining)
+     provider.attention_softmax_in_fp32 = args.attention_softmax_in_fp32
+     provider.gradient_accumulation_fusion = args.gradient_accumulation_fusion
+diff --git a/miles/backends/megatron_utils/update_weight/update_weight_from_distributed/broadcast.py b/miles/backends/megatron_utils/update_weight/update_weight_from_distributed/broadcast.py
+index a7d37a5a..f330e8d8 100644
+--- a/miles/backends/megatron_utils/update_weight/update_weight_from_distributed/broadcast.py
++++ b/miles/backends/megatron_utils/update_weight/update_weight_from_distributed/broadcast.py
+@@ -39,6 +39,7 @@ class UpdateWeightFromDistributed(DistBucketedWeightUpdateMixin):
+         """
+         self.args = args
+         self.model = model
++        self.weights_getter = weights_getter
+         self.model_name = model_name
+         self.quantization_config = quantization_config
+         self.weight_version = 0
+diff --git a/miles/backends/megatron_utils/update_weight/update_weight_from_distributed/mixin.py b/miles/backends/megatron_utils/update_weight/update_weight_from_distributed/mixin.py
+index bbeea97f..e92f80aa 100644
+--- a/miles/backends/megatron_utils/update_weight/update_weight_from_distributed/mixin.py
++++ b/miles/backends/megatron_utils/update_weight/update_weight_from_distributed/mixin.py
+@@ -75,6 +75,15 @@ class DistBucketedWeightUpdateMixin:
+         self.is_lora = is_lora
+         # Set by the actor before each update_weights call (loaded map at reconcile).
+         self.multi_lora_adapters = None
++        if self.args.megatron_to_hf_mode == "bridge":
++            self._hf_weight_iterator = HfWeightIteratorBase.create(
++                args=args,
++                model=model,
++                model_name=model_name,
++                quantization_config=quantization_config,
++                is_lora=is_lora,
++            )
++
+         if self.is_lora:
+             assert args.megatron_to_hf_mode == "bridge", (
+                 "LoRA weight sync over distributed engines requires "
+@@ -87,13 +96,15 @@ class DistBucketedWeightUpdateMixin:
+             )
+             self._lora_config = build_lora_sync_config(args)
+             self._lora_loaded = False
+-            self._hf_weight_iterator = HfWeightIteratorBase.create(
+-                args=args,
+-                model=model,
+-                model_name=model_name,
+-                quantization_config=quantization_config,
+-                is_lora=True,
+-            )
++
++    def _update_base_weights_with_bridge(self, pbar: tqdm | None = None) -> None:
++        megatron_local_weights = self.weights_getter()
++        for hf_named_tensors in self._hf_weight_iterator.get_hf_weight_chunks(
++            megatron_local_weights,
++            weight_type="base",
++        ):
++            if self._is_source:
++                self._update_weight_implementation(hf_named_tensors, pbar)
+ 
+     def _gather_and_update_non_expert_weights(
+         self,
+@@ -371,10 +382,14 @@ class DistBucketedWeightUpdateMixin:
+             if not is_lora:
+                 pbar = tqdm(desc=f"[{self._group_name}] Update weights", total=0) if self._is_source else None
+ 
+-                self._gather_and_update_non_expert_weights(self._update_weight_implementation, pbar)
+-                dist.barrier(group=get_gloo_group())
+-                self._gather_and_update_expert_weights(self._update_weight_implementation, pbar)
+-                dist.barrier(group=get_gloo_group())
++                if self.args.megatron_to_hf_mode == "bridge":
++                    self._update_base_weights_with_bridge(pbar)
++                    dist.barrier(group=get_gloo_group())
++                else:
++                    self._gather_and_update_non_expert_weights(self._update_weight_implementation, pbar)
++                    dist.barrier(group=get_gloo_group())
++                    self._gather_and_update_expert_weights(self._update_weight_implementation, pbar)
++                    dist.barrier(group=get_gloo_group())
+ 
+             # Adapter weights: every iteration.
+             if is_lora:
+diff --git a/miles/backends/megatron_utils/update_weight/update_weight_from_distributed/p2p.py b/miles/backends/megatron_utils/update_weight/update_weight_from_distributed/p2p.py
+index 0c456933..097510c9 100644
+--- a/miles/backends/megatron_utils/update_weight/update_weight_from_distributed/p2p.py
++++ b/miles/backends/megatron_utils/update_weight/update_weight_from_distributed/p2p.py
+@@ -56,6 +56,7 @@ class UpdateWeightP2P(DistBucketedWeightUpdateMixin):
+     ) -> None:
+         self.args = args
+         self.model = model
++        self.weights_getter = weights_getter
+         self.model_name = model_name
+         self.quantization_config = quantization_config
+         self.weight_version = 0
+diff --git a/miles/ray/rollout/metrics.py b/miles/ray/rollout/metrics.py
+index 45609599..6a077daa 100644
+--- a/miles/ray/rollout/metrics.py
++++ b/miles/ray/rollout/metrics.py
+@@ -93,12 +93,14 @@ def log_rollout_data(rollout_id, args, samples, rollout_extra_metrics, rollout_t
+ 
+ 
+ def _compute_metrics_from_samples(args, samples):
+-    response_lengths = [sample.effective_response_length for sample in samples]
++    response_lengths = [sample.response_length for sample in samples]
++    effective_response_lengths = [sample.effective_response_length for sample in samples]
+ 
+     log_dict = {}
+     log_dict |= _compute_training_sample_metrics(args, samples)
+     log_dict |= _compute_episode_response_length_metrics(samples)
+     log_dict |= dict_add_prefix(compute_statistics(response_lengths), "response_len/")
++    log_dict |= dict_add_prefix(compute_statistics(effective_response_lengths), "effective_response_len/")
+     log_dict |= _compute_zero_std_metrics(args, samples)
+     log_dict |= _compute_spec_metrics(args, samples)
+     log_dict |= _compute_prefix_cache_metrics(args, samples)
+diff --git a/miles/rollout/session/core.py b/miles/rollout/session/core.py
+index c0fa2b18..68678859 100644
+--- a/miles/rollout/session/core.py
++++ b/miles/rollout/session/core.py
+@@ -217,7 +217,12 @@ def extract_completion(result: dict) -> tuple:
+ 
+     meta_info = choice.get("meta_info")
+     if not isinstance(meta_info, dict) or "output_token_logprobs" not in meta_info:
+-        raise UpstreamResponseError("meta_info and output_token_logprobs must be in choice (requires logprobs=True)")
++        raise UpstreamResponseError(
++            "meta_info and output_token_logprobs must be in choice (requires logprobs=True); "
++            f"response_keys={list(response.keys())} choice_keys={list(choice.keys())} "
++            f"response_body={result.get('response_body', b'')!r} "
++            f"request_body={result.get('request_body', b'')!r}"
++        )
+     assistant_message = choice.get("message") or {}
+     if assistant_message.get("content") is None:
+         raise UpstreamResponseError(
+diff --git a/miles/rollout/session/server.py b/miles/rollout/session/server.py
+index e4e2004c..a45b9a75 100644
+--- a/miles/rollout/session/server.py
++++ b/miles/rollout/session/server.py
+@@ -36,6 +36,7 @@ class SessionServer:
+         self.client = httpx.AsyncClient(
+             limits=httpx.Limits(max_connections=1024),
+             timeout=httpx.Timeout(timeout),
++            trust_env=False,
+         )
+ 
+         # Close the httpx connection pool when uvicorn shuts down to avoid FD leaks.
+diff --git a/miles/router/router.py b/miles/router/router.py
+index 8782e633..bb9ea9e4 100644
+--- a/miles/router/router.py
++++ b/miles/router/router.py
+@@ -58,6 +58,7 @@ class MilesRouter:
+         self.client = httpx.AsyncClient(
+             limits=httpx.Limits(max_connections=max_connections),
+             timeout=httpx.Timeout(timeout),
++            trust_env=False,
+         )
+ 
+         self._setup_routes()
+diff --git a/miles/utils/arguments.py b/miles/utils/arguments.py
+index f0be5b7a..7c8e1a6c 100644
+--- a/miles/utils/arguments.py
++++ b/miles/utils/arguments.py
+@@ -1035,6 +1035,16 @@ def get_miles_extra_args_provider(add_custom_arguments=None):
+             parser.add_argument("--apply-chat-template", action="store_true", default=False)
+             # Temporarily be JSON-serialized str, will be a real dict after using Omegaconf
+             parser.add_argument("--apply-chat-template-kwargs", type=json.loads, default="{}")
++            parser.add_argument(
++                "--think-mode",
++                action=argparse.BooleanOptionalAction,
++                default=False,
++                help=(
++                    "Enable Qwen3.5-style thinking prompts during rollout. When set, "
++                    "world-model data sources render prompts with an open <think> tag "
++                    "so train/eval rollouts generate reasoning before the final observation."
++                ),
++            )
+             parser.add_argument(
+                 "--chat-template-path",
+                 type=str,
+diff --git a/miles/utils/chat_template_utils/deepseek.py b/miles/utils/chat_template_utils/deepseek.py
+index 58a4d8c6..9c1f64e4 100644
+--- a/miles/utils/chat_template_utils/deepseek.py
++++ b/miles/utils/chat_template_utils/deepseek.py
+@@ -16,11 +16,24 @@ import json
+ import os
+ from typing import Any
+ 
+-from sglang.srt.entrypoints.openai import encoding_dsv4
+ from sglang.srt.entrypoints.openai.protocol import Tool
+ 
+ from miles.utils.chat_template_utils.templates import encoding_dsv32
+ 
++try:
++    import sglang.srt.entrypoints.openai.encoding_dsv4 as encoding_dsv4
++except ImportError:
++    class _MissingDeepSeekV4Template:
++        thinking_start_token = ""
++        thinking_end_token = ""
++
++        def encode_messages(self, *args, **kwargs):
++            raise RuntimeError(
++                "DeepSeek-V4 chat template support requires sglang.srt.entrypoints.openai.encoding_dsv4"
++            )
++
++    encoding_dsv4 = _MissingDeepSeekV4Template()
++
+ _ASSISTANT_SP_TOKEN = "<｜Assistant｜>"
+ 
+ 
+diff --git a/miles/utils/dumper_utils.py b/miles/utils/dumper_utils.py
+index 09711887..e76efcd7 100644
+--- a/miles/utils/dumper_utils.py
++++ b/miles/utils/dumper_utils.py
+@@ -2,6 +2,7 @@ from __future__ import annotations
+ 
+ import asyncio
+ import dataclasses
++import ast
+ import enum
+ import logging
+ import shutil
+@@ -12,7 +13,11 @@ from typing import Any
+ 
+ import torch
+ import torch.distributed as dist
+-from sglang.srt.debug_utils.dumper import DumperConfig, _get_rank, dumper
++
++try:
++    from sglang.srt.debug_utils.dumper import DumperConfig, _get_rank, dumper
++except ImportError:
++    from sglang.srt.debug_utils.dumper import _DumperConfig as DumperConfig, _get_rank, dumper
+ 
+ from miles.backends.training_utils.parallel import get_parallel_state
+ from miles.utils.environ import enable_experimental_ft_trainer
+@@ -332,7 +337,30 @@ def _barrier_after_dump_dir_cleanup() -> None:
+ 
+ def _get_phase_override_configs(args: Namespace, phase: DumperPhase) -> dict[str, Any]:
+     raw = getattr(args, f"dumper_{phase.value}")
+-    return {"enable": args.dumper_enable, **DumperConfig._kv_pairs_to_dict(raw)}
++    return {"enable": args.dumper_enable, **_parse_dumper_kv_pairs(raw)}
++
++
++def _parse_dumper_kv_pairs(raw: str | None) -> dict[str, Any]:
++    if not raw:
++        return {}
++
++    overrides: dict[str, Any] = {}
++    for token in raw.split():
++        key, separator, value = token.partition("=")
++        if not separator:
++            raise ValueError(f"Invalid dumper override {token!r}; expected key=value")
++        overrides[key] = _parse_dumper_value(value)
++    return overrides
++
++
++def _parse_dumper_value(value: str) -> Any:
++    lowered = value.lower()
++    if lowered in {"true", "false"}:
++        return lowered == "true"
++    try:
++        return ast.literal_eval(value)
++    except (ValueError, SyntaxError):
++        return value
+ 
+ 
+ def _is_phase_enabled(args: Namespace, phase: DumperPhase) -> bool:
+diff --git a/miles/utils/processing_utils.py b/miles/utils/processing_utils.py
+index 1f511b5b..74d7fa89 100644
+--- a/miles/utils/processing_utils.py
++++ b/miles/utils/processing_utils.py
+@@ -81,6 +81,7 @@ def load_tokenizer(name_or_path: str, chat_template_path: str | None = None, **k
+         return _TOKENIZER_CACHE[cache_key]
+ 
+     register_hf_config_aliases()
++    kwargs.setdefault("fix_mistral_regex", True)
+     tokenizer = AutoTokenizer.from_pretrained(name_or_path, **kwargs)
+     _fix_v5_tokenizer_components(tokenizer, name_or_path)
+     if chat_template_path:
+diff --git a/tests/fast/backends/megatron_utils/test_model_initialize.py b/tests/fast/backends/megatron_utils/test_model_initialize.py
+index d3e4ee9f..299f453b 100644
+--- a/tests/fast/backends/megatron_utils/test_model_initialize.py
++++ b/tests/fast/backends/megatron_utils/test_model_initialize.py
+@@ -173,6 +173,7 @@ def test_initialize_steps_scheduler_when_checkpoint_did_not_restore_it():
+     model = [_FakeModelChunk()]
+     optimizer = object()
+     opt_param_scheduler = MagicMock()
++    opt_param_scheduler.num_steps = 0
+ 
+     with ExitStack() as stack:
+         stack.enter_context(
+@@ -187,3 +188,27 @@ def test_initialize_steps_scheduler_when_checkpoint_did_not_restore_it():
+ 
+     assert result == (model, optimizer, opt_param_scheduler, 100)
+     opt_param_scheduler.step.assert_called_once_with(increment=800)
++
++
++def test_initialize_does_not_step_restored_scheduler_with_override():
++    from miles.backends.megatron_utils.model import initialize_model_and_optimizer
++
++    args = Namespace(use_checkpoint_opt_param_scheduler=False, global_batch_size=8)
++    model = [_FakeModelChunk()]
++    optimizer = object()
++    opt_param_scheduler = MagicMock()
++    opt_param_scheduler.num_steps = 800
++
++    with ExitStack() as stack:
++        stack.enter_context(
++            patch(
++                "miles.backends.megatron_utils.model.setup_model_and_optimizer",
++                return_value=(model, optimizer, opt_param_scheduler),
++            )
++        )
++        stack.enter_context(patch("miles.backends.megatron_utils.model.load_checkpoint", return_value=(100, 0)))
++        _patch_initialize_side_effects(stack)
++        result = initialize_model_and_optimizer(args)
++
++    assert result == (model, optimizer, opt_param_scheduler, 100)
++    opt_param_scheduler.step.assert_not_called()
+diff --git a/tests/fast/backends/megatron_utils/test_qwen3_5_mtp_bridge_mapping.py b/tests/fast/backends/megatron_utils/test_qwen3_5_mtp_bridge_mapping.py
+index af1bd73d..47e82f60 100644
+--- a/tests/fast/backends/megatron_utils/test_qwen3_5_mtp_bridge_mapping.py
++++ b/tests/fast/backends/megatron_utils/test_qwen3_5_mtp_bridge_mapping.py
+@@ -200,3 +200,29 @@ def test_raw_qwen3_5_mtp_export_keeps_eh_proj_column_order():
+     )
+ 
+     assert converted == [("mtp.fc.weight", weight)]
++
++
++def test_raw_qwen3_5_gdn_out_norm_exports_standard_rmsnorm_weight():
++    module = load_raw_export_module()
++
++    weight = torch.tensor([[-0.25, 0.0, 0.5]], dtype=torch.float32)
++    converted = module.convert_qwen3_5_to_hf(
++        types.SimpleNamespace(hidden_size=8, num_attention_heads=2, num_query_groups=1, kv_channels=4),
++        "module.module.decoder.layers.0.self_attention.out_norm.weight",
++        weight,
++    )
++
++    assert converted[0][0] == "model.language_model.layers.0.linear_attn.norm.weight"
++    assert torch.equal(converted[0][1], weight + 1)
++
++
++def test_raw_qwen3_5_gdn_mapping_does_not_alias_norm_names():
++    module = load_raw_export_module()
++
++    weight = torch.ones(3, dtype=torch.float32)
++    converted = module.convert_qwen3_5_to_hf(
++        types.SimpleNamespace(hidden_size=8, num_attention_heads=2, num_query_groups=1, kv_channels=4),
++        "module.module.decoder.layers.0.self_attention.out_norm.weight",
++        weight,
++    )
++    assert converted[0][0] != "model.language_model.layers.0.linear_attn.out_norm.weight"
+diff --git a/tests/fast/ray/rollout/test_metrics.py b/tests/fast/ray/rollout/test_metrics.py
+index 0b5156e0..4acf0580 100644
+--- a/tests/fast/ray/rollout/test_metrics.py
++++ b/tests/fast/ray/rollout/test_metrics.py
+@@ -42,8 +42,15 @@ class TestEpisodeResponseLengthMetrics:
+ 
+         out = _compute_metrics_from_samples(make_args(advantage_estimator="ppo"), samples)
+ 
++        expected_raw = {
++            "mean": pytest.approx(16 / 3),
++            "median": pytest.approx(5.0),
++            "max": pytest.approx(7.0),
++            "min": pytest.approx(4.0),
++        }
+         for statistic in ("mean", "median", "max", "min"):
+-            assert out[f"episode_response_length/{statistic}"] == out[f"response_len/{statistic}"]
++            assert out[f"episode_response_length/{statistic}"] == out[f"effective_response_len/{statistic}"]
++            assert out[f"response_len/{statistic}"] == expected_raw[statistic]
+ 
+     def test_empty_samples_emit_no_episode_length_metrics(self):
+         assert _compute_episode_response_length_metrics([]) == {}
+@@ -71,6 +78,7 @@ class TestEpisodeResponseLengthMetrics:
+         assert not any(key.startswith("episode_response_length/") for key in out)
+         assert "episode_total_response_length/mean" not in out
+         assert out["response_len/mean"] == pytest.approx(4.0)
++        assert out["effective_response_len/mean"] == pytest.approx(4.0)
+ 
+     def test_removed_sample_has_zero_effective_length_but_keeps_total_length(self):
+         sample = make_sample(
+@@ -306,6 +314,8 @@ class TestTitoMismatchMetrics:
+         assert logged["rollout/episode_raw_reward"] == pytest.approx(1.5)
+         assert logged["rollout/episode_response_length/mean"] == pytest.approx(4.0)
+         assert logged["rollout/episode_total_response_length/mean"] == pytest.approx(4.0)
++        assert logged["rollout/response_len/mean"] == pytest.approx(4.0)
++        assert logged["rollout/effective_response_len/mean"] == pytest.approx(4.0)
+         assert logged["rollout/tito_session_mismatch_rate/v2/assistant_text"] == 0.25
+         assert "rollout/tito_session_mismatch_rate/assistant_text" not in logged
+ 

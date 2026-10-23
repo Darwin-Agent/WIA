@@ -1,0 +1,12 @@
+diff --git a/python/sglang/srt/configs/qwen3_asr.py b/python/sglang/srt/configs/qwen3_asr.py
+index 8e2c70a..4e2a0e6 100644
+--- a/python/sglang/srt/configs/qwen3_asr.py
++++ b/python/sglang/srt/configs/qwen3_asr.py
+@@ -164,5 +164,5 @@
+         return self.thinker_config.text_config
+ 
+ 
+-AutoConfig.register("qwen3_asr", Qwen3ASRConfig)
+-AutoConfig.register("qwen3_asr_thinker", Qwen3ASRThinkerConfig)
++AutoConfig.register("qwen3_asr", Qwen3ASRConfig, exist_ok=True)
++AutoConfig.register("qwen3_asr_thinker", Qwen3ASRThinkerConfig, exist_ok=True)

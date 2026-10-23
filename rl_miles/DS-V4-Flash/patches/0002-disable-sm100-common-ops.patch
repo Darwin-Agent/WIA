@@ -1,0 +1,69 @@
+diff --git a/python/sglang/kernels/aot/CMakeLists.txt b/python/sglang/kernels/aot/CMakeLists.txt
+index 0d22047..3b99ec5 100644
+--- a/python/sglang/kernels/aot/CMakeLists.txt
++++ b/python/sglang/kernels/aot/CMakeLists.txt
+@@ -177,6 +177,7 @@ option(SGL_KERNEL_ENABLE_FA3              "Enable FA3"              ${DEFAULT_SG
+ option(SGL_KERNEL_ENABLE_FA3_SPARSE_MASK  "Enable FA3 sparse mask kernels" OFF)
+ option(SGL_KERNEL_ENABLE_SM90A            "Enable SM90A"            OFF)
+ option(SGL_KERNEL_ENABLE_SM100A           "Enable SM100A"           OFF)
++option(SGL_KERNEL_ENABLE_SM100_COMMON     "Enable SM100+ common ops" ON)
+ 
+ if (SGL_KERNEL_ENABLE_BF16)
+     list(APPEND SGL_KERNEL_CUDA_FLAGS
+@@ -205,7 +206,7 @@ if (ENABLE_BELOW_SM90)
+ 
+ endif()
+ 
+-if ("${CUDA_VERSION}" VERSION_GREATER_EQUAL "12.8" OR SGL_KERNEL_ENABLE_SM100A)
++if (SGL_KERNEL_ENABLE_SM100A)
+     # sm_100f is available in CUDA 12.9+ and covers all sm_100, sm_103, sm_107, sm_10x
+     if ("${CUDA_VERSION}" VERSION_GREATER_EQUAL "12.9")
+         list(APPEND SGL_KERNEL_CUDA_FLAGS
+@@ -339,6 +340,7 @@ set_target_properties(common_ops_sm90_build PROPERTIES
+ 
+ # =========================== Common SM100+ Build ============================= #
+ # Build SM100+ library with precise math (same namespace, different directory)
++if (SGL_KERNEL_ENABLE_SM100_COMMON)
+ Python_add_library(common_ops_sm100_build MODULE USE_SABI ${SKBUILD_SABI_VERSION} WITH_SOABI ${SOURCES})
+ 
+ target_compile_options(common_ops_sm100_build PRIVATE
+@@ -350,6 +352,7 @@ set_target_properties(common_ops_sm100_build PROPERTIES
+     OUTPUT_NAME "common_ops"
+     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/sm100"
+ )
++endif()
+ 
+ find_package(Python3 COMPONENTS Interpreter REQUIRED)
+ execute_process(
+@@ -368,7 +371,9 @@ else()
+ endif()
+ 
+ target_link_libraries(common_ops_sm90_build PRIVATE ${TORCH_LIBRARIES} c10 cuda cublas cublasLt)
++if (SGL_KERNEL_ENABLE_SM100_COMMON)
+ target_link_libraries(common_ops_sm100_build PRIVATE ${TORCH_LIBRARIES} c10 cuda cublas cublasLt)
++endif()
+ 
+ # sparse flash attention
+ target_compile_definitions(common_ops_sm90_build PRIVATE
+@@ -376,17 +381,21 @@ target_compile_definitions(common_ops_sm90_build PRIVATE
+     FLASHATTENTION_DISABLE_DROPOUT
+     FLASHATTENTION_DISABLE_UNEVEN_K
+ )
++if (SGL_KERNEL_ENABLE_SM100_COMMON)
+ target_compile_definitions(common_ops_sm100_build PRIVATE
+     FLASHATTENTION_DISABLE_BACKWARD
+     FLASHATTENTION_DISABLE_DROPOUT
+     FLASHATTENTION_DISABLE_UNEVEN_K
+ )
++endif()
+ 
+ # Install to different subdirectories
+ # CMake will find the built libraries in their respective LIBRARY_OUTPUT_DIRECTORY locations
+ # and install them to the specified destinations
+ install(TARGETS common_ops_sm90_build LIBRARY DESTINATION sgl_kernel/sm90)
++if (SGL_KERNEL_ENABLE_SM100_COMMON)
+ install(TARGETS common_ops_sm100_build LIBRARY DESTINATION sgl_kernel/sm100)
++endif()
+ 
+ # ============================ Optional Install: FA3 ============================= #
+ # set flash-attention sources file
