@@ -1,0 +1,8 @@
+# Keep the original CUDA12/Torch ABI; kernel wheels must match this base image.
+torch==2.9.1
+transformers==5.12.1
+transformer-engine==2.10.0
+transformer-engine-torch==2.10.0
+flash-attn==2.7.4.post1
+flash-linear-attention==0.5.2
+datasets==4.5.0

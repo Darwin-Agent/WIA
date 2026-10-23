@@ -1,0 +1,34 @@
+# Local environments, external dependencies, caches and weights
+.venv/
+venv/
+vendor/
+sglang-src/
+.cache/
+models/
+__pycache__/
+*.py[cod]
+*.safetensors
+*.pt
+*.pth
+*.bin
+
+# Runtime logs, PIDs, requests/responses and service inventories
+logging/
+logs/
+*.log
+*.pid
+*.jsonl
+*.jsonl.gz
+api_outputs/
+service_endpoints*.txt
+
+# Local credentials; never commit real values
+.env
+.env.*
+!.env.example
+secrets/
+keys/
+*.key
+*.pem
+*api_keys*.txt
+key.txt

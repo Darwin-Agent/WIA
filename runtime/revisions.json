@@ -1,0 +1,46 @@
+{
+  "swift": {
+    "url": "https://github.com/modelscope/ms-swift.git",
+    "revision": "225b1a0eb455aca3d54fc4d9e34a5a146b154ae9",
+    "path": "cpt/ms-swift",
+    "patches": [
+      "swift-user-loss.patch",
+      "swift-collator-padding.patch",
+      "swift-loss-mask-alias.patch"
+    ]
+  },
+  "mcore-bridge": {
+    "url": "https://github.com/modelscope/mcore-bridge.git",
+    "revision": "1f0b2c4ead2d607e9c90af64070a67597cd0f360",
+    "path": "cpt/mcore-bridge",
+    "patches": []
+  },
+  "miles": {
+    "url": "https://github.com/radixark/miles.git",
+    "revision": "dbbab1566ae438f7202fff653eae938e07b1d4b6",
+    "path": "rl_miles/miles",
+    "patches": [
+      "miles-runtime.patch"
+    ]
+  },
+  "megatron": {
+    "url": "https://github.com/radixark/Megatron-LM.git",
+    "revision": "235952df607b3820716e5e67728a5ab470ca33ae",
+    "path": "rl_miles/Megatron-LM",
+    "patches": []
+  },
+  "megatron-bridge": {
+    "url": "https://github.com/radixark/Megatron-Bridge.git",
+    "revision": "7f0fb3456f8ffe47599b5fd167b454605d85f932",
+    "path": "rl_miles/Megatron-Bridge",
+    "patches": []
+  },
+  "sglang-miles": {
+    "url": "https://github.com/sgl-project/sglang.git",
+    "revision": "3bbb2812e2ca1defdee76f6ec09dbb2456c21c69",
+    "path": "rl_miles/sglang-miles",
+    "patches": [
+      "sglang-miles-runtime.patch"
+    ]
+  }
+}

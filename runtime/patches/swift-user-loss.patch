@@ -1,0 +1,40 @@
+--- a/swift/loss_scale/base.py
++++ b/swift/loss_scale/base.py
+@@ -1,5 +1,6 @@
+ # Copyright (c) ModelScope Contributors. All rights reserved.
+ import json
++import os
+ import os
+ from typing import List, Literal, Optional, Tuple
+ 
+@@ -89,6 +90,7 @@
+         res_loss_scale = []
+         i = 0
+         last_user_round = get_last_user_round(messages)
++        train_user_loss = os.environ.get('SWIFT_TRAIN_USER_LOSS', '').lower() in {'1', 'true', 'yes', 'on'}
+         for context, context_type in zip(context_list, context_types):
+             is_last_round = 2 * i >= last_user_round
+             query, loss, loss_scale = None, None, None
+@@ -99,6 +101,22 @@
+                 loss_scale = messages[2 * i + 1].get('loss_scale')
+                 assert context == messages[2 * i + 1]['content']
+                 i += 1
++            elif train_user_loss and context_type == ContextType.OTHER and i < len(messages) // 2:
++                user_message = messages[2 * i]
++                user_loss = user_message.get('loss')
++                user_content = user_message.get('content')
++                if user_loss is True and isinstance(context, str) and isinstance(user_content, str) and user_content:
++                    if user_content in context:
++                        prefix, rest = context.split(user_content, 1)
++                        suffix = rest
++                        split_context = [part for part in (prefix, user_content, suffix) if part]
++                        split_loss = [part == user_content for part in split_context]
++                        for split_part, split_part_loss in zip(split_context, split_loss):
++                            new_context, new_loss_scale = self._inner_call(
++                                split_part, context_type, query, split_part_loss, loss_scale, is_last_round)
++                            res_context_list += new_context
++                            res_loss_scale += new_loss_scale
++                        continue
+             if not isinstance(context, list) or (len(context) > 0 and isinstance(context[0], int)):
+                 context = [context]
+             for j in range(len(context)):

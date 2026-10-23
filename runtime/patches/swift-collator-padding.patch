@@ -1,0 +1,11 @@
+--- a/swift/template/base.py
++++ b/swift/template/base.py
+@@ -1911,7 +1911,7 @@
+             'attention_mask',
+             'attention_mask_2d',
+         ] + gather_keys
+-        pad_values = [self.tokenizer.pad_token_id, 0., 0, 0] + [-100, 0., 0, 0, 0]
++        pad_values = [self.tokenizer.pad_token_id, 0., 0, 0] + [-100, 0., 0, 0, 0, 0]
+         # Convert to tensor and remove unnecessary dimensions.
+         seq_lens = None
+         for key in pad_keys:
