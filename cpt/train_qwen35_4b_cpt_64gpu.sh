@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Adapted from Code/CPT/train_qwen35_4b_world_model_sft_8node.sh; private paths removed.
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   cat <<'USAGE'
 Qwen3.5-4B CPT: 8 nodes x 8 GPUs = 64 GPUs; NUM_TRAIN_EPOCHS=1.
-HF Swift + ZeRO-1, SP=4, DP=16, accumulation=32, effective batch=512.
+HF Swift + ZeRO-1, SP=4, DP=16, accumulation=64, effective batch=1024.
 Run once per node, with NNODES=8, NODE_RANK=<rank> and MASTER_ADDR=<rank-0-host>.
 WORLD_SIZE/RANK are supported node-count/node-rank aliases, not worker counts.
 Set MODEL_PATH, DATASET_PATH (or CACHED_DATASET), SWIFT_ROOT and SWIFT_VENV.
@@ -77,7 +76,7 @@ MAX_LENGTH="${MAX_LENGTH:-32768}"
 TRUNCATION_STRATEGY="${TRUNCATION_STRATEGY:-left}"
 PER_DEVICE_TRAIN_BATCH_SIZE="${PER_DEVICE_TRAIN_BATCH_SIZE:-1}"
 PER_DEVICE_EVAL_BATCH_SIZE="${PER_DEVICE_EVAL_BATCH_SIZE:-1}"
-GRADIENT_ACCUMULATION_STEPS="${GRADIENT_ACCUMULATION_STEPS:-32}"
+GRADIENT_ACCUMULATION_STEPS="${GRADIENT_ACCUMULATION_STEPS:-64}"
 LEARNING_RATE="${LEARNING_RATE:-2e-5}"
 OPTIM="${OPTIM:-adamw_torch_fused}"
 LOSS_SCALE="${LOSS_SCALE:-default}"
