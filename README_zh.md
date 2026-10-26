@@ -66,37 +66,38 @@ DP 是 Dense 数据并行度，不把 EP 再作为除数。
 
 ### CPT
 
-| 模型 | GPU / 节点 | 后端与并行配置 | Dense DP | 全局 batch | epoch |
-| --- | --- | --- | ---: | ---: | ---: |
-| 4B | 64 / 8 | HF Swift；SP4、ZeRO-1 | 16 | 512 | 1 |
-| 9B | 64 / 8 | Megatron；TP4 / PP1 / CP1 | 16 | 1024 | 1 |
-| 27B | 128 / 16 | Megatron；TP8 / PP1 / CP1 | 16 | 1024 | 1 |
-| 35B-A3B | 128 / 16 | Megatron；TP2 / PP8 / CP1 / EP8 / ETP1 | 8 | 16 | 1 |
+| 模型 | GPU / 节点 | 后端与并行配置 | Dense DP | 全局 batch |
+| --- | --- | --- | ---: | ---: |
+| 4B | 64 / 8 | HF Swift；SP4、ZeRO-1 | 16 | 1024 |
+| 9B | 64 / 8 | Megatron；TP4 / PP1 / CP1 | 16 | 1024 |
+| 27B | 128 / 16 | Megatron；TP8 / PP1 / CP1 | 16 | 1024 |
+| 35B-A3B | 128 / 16 | Megatron；TP2 / PP8 / CP1 / EP2 / ETP1 / SP | 8 | 1024 |
 
 4B 的 HF SP4 与 Megatron 的 `sequence_parallel=true` 不是同一机制。
+35B 表格行对应 `cpt/train_qwen35_35b_a3b_cpt_128gpu.sh`，使用 GBS1024；EP 是专家路由拓扑，不能再次作为 Dense DP 的除数。
 启动入口与缓存流程见 [CPT 指南](cpt/README_zh.md)。
 
 ### SFT
 
-| 模型 | GPU / 节点 | TP / PP / CP | EP / ETP | Dense DP | 全局 batch | epoch |
-| --- | --- | --- | --- | ---: | ---: | ---: |
-| 4B | 8 / 1 | 2 / 1 / 4 | 1 / 1 | 1 | 128 | 2 |
-| 9B | 8 / 1 | 2 / 1 / 4 | 1 / 1 | 1 | 128 | 2 |
-| 27B | 64 / 8 | 4 / 4 / 4 | 1 / 1 | 1 | 128 | 2 |
-| 35B-A3B | 32 / 4 | 2 / 4 / 4 | 8 / 1 | 1 | 128 | 2 |
+| 模型 | GPU / 节点 | TP / PP / CP | EP / ETP | Dense DP | 全局 batch |
+| --- | --- | --- | --- | ---: | ---: |
+| 4B | 8 / 1 | 2 / 1 / 4 | 1 / 1 | 1 | 128 |
+| 9B | 8 / 1 | 2 / 1 / 4 | 1 / 1 | 1 | 128 |
+| 27B | 64 / 8 | 4 / 4 / 4 | 1 / 1 | 1 | 128 |
+| 35B-A3B | 32 / 4 | 2 / 4 / 4 | 8 / 1 | 1 | 128 |
 
 默认 micro batch 为 1，累计 128 个 microbatch；需支持 GatedDeltaNet CP 的运行环境。
 权重格式、分布式启动与安全限制见 [SFT 指南](sft_code/README_zh.md)。
 
 ### RL
 
-| 模型 | 总 GPU | actor / rollout GPU | actor TP / PP / CP | EP / ETP | actor Dense DP | rollout GPU/引擎 × 引擎数 | 全局 batch | epoch |
-| --- | ---: | --- | --- | --- | ---: | --- | ---: | ---: |
-| 4B | 128 | 64 / 64 | 2 / 1 / 4 | 1 / 1 | 8 | 1 × 64 | 1024 | 1 |
-| 9B | 128 | 64 / 64 | 2 / 2 / 4 | 1 / 1 | 4 | 2 × 32 | 2048 | 1 |
-| 27B | 128 | 64 / 64 | 4 / 4 / 4 | 1 / 1 | 1 | 2 × 32 | 2048 | 1 |
-| 35B-A3B | 128 | 64 / 64 | 2 / 4 / 4 | 8 / 1 | 2 | 2 × 32 | 2048 | 1 |
-| 122B-A10B | 160 | 96 / 64 | 2 / 12 / 4 | 8 / 1 | 1 | 8 × 8 | 2048 | 2 |
+| 模型 | 总 GPU | actor / rollout GPU | actor TP / PP / CP | EP / ETP | actor Dense DP | rollout GPU/引擎 × 引擎数 | 全局 batch |
+| --- | ---: | --- | --- | --- | ---: | --- | ---: |
+| 4B | 128 | 64 / 64 | 2 / 1 / 4 | 1 / 1 | 8 | 1 × 64 | 1024 |
+| 9B | 128 | 64 / 64 | 2 / 2 / 4 | 1 / 1 | 4 | 2 × 32 | 2048 |
+| 27B | 128 | 64 / 64 | 4 / 4 / 4 | 1 / 1 | 1 | 2 × 32 | 2048 |
+| 35B-A3B | 128 | 64 / 64 | 2 / 4 / 4 | 8 / 1 | 2 | 2 × 32 | 2048 |
+| 122B-A10B | 160 | 96 / 64 | 2 / 12 / 4 | 8 / 1 | 1 | 8 × 8 | 2048 |
 
 122B-A10B 仅提供 160-GPU RL 入口，不提供 CPT/SFT 入口。
 所有 RL 入口默认 `MAX_WEIGHT_STALENESS=1`、`ASYNC_DATA_BUFFER_CAPACITY_FACTOR=1.0`。
@@ -107,7 +108,7 @@ DP 是 Dense 数据并行度，不把 EP 再作为除数。
 
 | 阶段 | 本地/集群运行时 | 需要单独准备的服务 |
 | --- | --- | --- |
-| CPT / SFT | Swift、Megatron；4B CPT 还使用 DeepSpeed | 无 |
+| CPT / SFT | Swift、Megatron；4B/35B CPT 还使用 DeepSpeed | 无 |
 | RL：4B / 9B / 27B / 35B-A3B | Ray + Megatron actor + SGLang rollout | LLM judge；similarity 默认关闭 |
 | RL：122B-A10B | Ray + Megatron actor + SGLang rollout | LLM judge + similarity API + embedding 后端 |
 | 独立 Eval | 本地 vLLM，或用户配置的兼容推理服务 | LLM judge；`--skip-judge` 可只生成 |
@@ -123,6 +124,10 @@ RL rollout 由 Miles 管理，**不是**单独部署的 DeepSeek judge。
 
 RL 中 thinking **超过 10,000 字符**时，最终奖励乘以 0.9；独立 Eval 不应用此惩罚。
 奖励失败降级与权重覆盖规则见 [RL 奖励配置](rl_miles/README_zh.md#奖励配置)。
+
+## 消融范围
+
+公开报告中的 4B、9B 和 35B-A3B 提供完整的 CPT→SFT→RL 阶段对比。27B 仅报告起始的 Qwen3.5-27B 检查点和最终的 WIA-WM-27B 检查点，不包含中间阶段结果。因此，27B 应解释为起始检查点到最终模型的端点对比，不能据此单独估计 CPT、SFT 和 RL 的贡献。
 
 ## 快速开始
 
