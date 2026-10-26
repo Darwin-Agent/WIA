@@ -63,35 +63,37 @@ pipeline and context parallelism; EP/ETP mean expert/expert-tensor parallelism. 
 
 ### CPT
 
-| Model | GPUs / nodes | Backend and parallelism | Dense DP | Global batch | Epochs |
-| --- | --- | --- | ---: | ---: | ---: |
-| 4B | 64 / 8 | HF Swift; SP4, ZeRO-1 | 16 | 512 | 1 |
-| 9B | 64 / 8 | Megatron; TP4 / PP1 / CP1 | 16 | 1024 | 1 |
-| 27B | 128 / 16 | Megatron; TP8 / PP1 / CP1 | 16 | 1024 | 1 |
-| 35B-A3B | 128 / 16 | Megatron; TP2 / PP8 / CP1 / EP8 / ETP1 | 8 | 16 | 1 |
+| Model | GPUs / nodes | Backend and parallelism | Dense DP | Global batch |
+| --- | --- | --- | ---: | ---: |
+| 4B | 64 / 8 | HF Swift; SP4, ZeRO-1 | 16 | 1024 |
+| 9B | 64 / 8 | Megatron; TP4 / PP1 / CP1 | 16 | 1024 |
+| 27B | 128 / 16 | Megatron; TP8 / PP1 / CP1 | 16 | 1024 |
+| 35B-A3B | 128 / 16 | Megatron; TP2 / PP8 / CP1 / EP2 / ETP1 / SP | 8 | 1024 |
 
-HF SP4 and Megatron's boolean sequence parallelism are different mechanisms. See [CPT](cpt/README.md).
+HF SP4 and Megatron's boolean sequence parallelism are different mechanisms. The 35B row uses
+`cpt/train_qwen35_35b_a3b_cpt_128gpu.sh` with GBS 1024; EP is an expert-routing topology and is not
+an additional factor in Dense DP. See [CPT](cpt/README.md) for the topology and accumulation settings.
 
 ### SFT
 
-| Model | GPUs / nodes | TP / PP / CP | EP / ETP | Dense DP | Global batch | Epochs |
-| --- | --- | --- | --- | ---: | ---: | ---: |
-| 4B | 8 / 1 | 2 / 1 / 4 | 1 / 1 | 1 | 128 | 2 |
-| 9B | 8 / 1 | 2 / 1 / 4 | 1 / 1 | 1 | 128 | 2 |
-| 27B | 64 / 8 | 4 / 4 / 4 | 1 / 1 | 1 | 128 | 2 |
-| 35B-A3B | 32 / 4 | 2 / 4 / 4 | 8 / 1 | 1 | 128 | 2 |
+| Model | GPUs / nodes | TP / PP / CP | EP / ETP | Dense DP | Global batch |
+| --- | --- | --- | --- | ---: | ---: |
+| 4B | 8 / 1 | 2 / 1 / 4 | 1 / 1 | 1 | 128 |
+| 9B | 8 / 1 | 2 / 1 / 4 | 1 / 1 | 1 | 128 |
+| 27B | 64 / 8 | 4 / 4 / 4 | 1 / 1 | 1 | 128 |
+| 35B-A3B | 32 / 4 | 2 / 4 / 4 | 8 / 1 | 1 | 128 |
 
 Micro batch is 1 and accumulation is 128. A GatedDeltaNet CP-capable runtime is required. See [SFT](sft_code/README.md).
 
 ### RL
 
-| Model | Total GPUs | Actor / rollout GPUs | Actor TP / PP / CP | EP / ETP | Actor Dense DP | GPUs/rollout engine × engines | Global batch | Epochs |
-| --- | ---: | --- | --- | --- | ---: | --- | ---: | ---: |
-| 4B | 128 | 64 / 64 | 2 / 1 / 4 | 1 / 1 | 8 | 1 × 64 | 1024 | 1 |
-| 9B | 128 | 64 / 64 | 2 / 2 / 4 | 1 / 1 | 4 | 2 × 32 | 2048 | 1 |
-| 27B | 128 | 64 / 64 | 4 / 4 / 4 | 1 / 1 | 1 | 2 × 32 | 2048 | 1 |
-| 35B-A3B | 128 | 64 / 64 | 2 / 4 / 4 | 8 / 1 | 2 | 2 × 32 | 2048 | 1 |
-| 122B-A10B | 160 | 96 / 64 | 2 / 12 / 4 | 8 / 1 | 1 | 8 × 8 | 2048 | 2 |
+| Model | Total GPUs | Actor / rollout GPUs | Actor TP / PP / CP | EP / ETP | Actor Dense DP | GPUs/rollout engine × engines | Global batch |
+| --- | ---: | --- | --- | --- | ---: | --- | ---: |
+| 4B | 128 | 64 / 64 | 2 / 1 / 4 | 1 / 1 | 8 | 1 × 64 | 1024 |
+| 9B | 128 | 64 / 64 | 2 / 2 / 4 | 1 / 1 | 4 | 2 × 32 | 2048 |
+| 27B | 128 | 64 / 64 | 4 / 4 / 4 | 1 / 1 | 1 | 2 × 32 | 2048 |
+| 35B-A3B | 128 | 64 / 64 | 2 / 4 / 4 | 8 / 1 | 2 | 2 × 32 | 2048 |
+| 122B-A10B | 160 | 96 / 64 | 2 / 12 / 4 | 8 / 1 | 1 | 8 × 8 | 2048 |
 
 122B-A10B has only a 160-GPU RL launcher; CPT/SFT launchers are not provided.
 All RL profiles default to `MAX_WEIGHT_STALENESS=1` and `ASYNC_DATA_BUFFER_CAPACITY_FACTOR=1.0`.
@@ -102,7 +104,7 @@ See [RL](rl_miles/README.md).
 
 | Stage | Training/inference runtime | Separately deployed services |
 | --- | --- | --- |
-| CPT / SFT | Swift, Megatron; DeepSpeed for 4B CPT | None |
+| CPT / SFT | Swift, Megatron; DeepSpeed for 4B/35B CPT | None |
 | RL: 4B / 9B / 27B / 35B-A3B | Ray + Megatron actor + SGLang rollout | LLM judge; similarity disabled by default |
 | RL: 122B-A10B | Ray + Megatron actor + SGLang rollout | LLM judge + similarity API + embedding backend |
 | Evaluation | Local vLLM or user-configured compatible server | LLM judge; `--skip-judge` generates without scoring |
@@ -117,6 +119,10 @@ Deployment: [DeepSeek judge](rl_miles/DS-V4-Flash/README.md) · [Embedding/simil
 
 RL multiplies the final reward by 0.9 when thinking exceeds **10,000 characters**. Independent evaluation does not.
 See [reward configuration](rl_miles/README.md#reward-configuration) for failure fallbacks and weight overrides.
+
+## Ablation scope
+
+The published ablation tables provide complete CPT-to-SFT-to-RL stage comparisons for 4B, 9B, and 35B-A3B. For 27B, the release reports only the starting Qwen3.5-27B checkpoint and the final WIA-WM-27B checkpoint; intermediate stage rows are not included. Therefore, 27B results should be interpreted as a starting-checkpoint-to-final-model comparison, not as separate CPT, SFT, and RL contribution estimates.
 
 ## Quick start
 
