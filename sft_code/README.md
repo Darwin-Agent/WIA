@@ -31,7 +31,7 @@ keep `SWIFT_ROOT` and `MEGATRON_ROOT` consistent. Reuse only after version/patch
 | 27B | `train_qwen35_27b_sft_64gpu.sh` | 8 × 8 | 4 / 4 / 4 | 1 / 1 | 1 | 128 |
 | 35B-A3B | `train_qwen35_35b_a3b_sft_32gpu.sh` | 4 × 8 | 2 / 4 / 4 | 8 / 1 | 1 | 128 |
 
-Defaults: 2 epochs, micro batch 1, accumulation 128, length 65536, learning rate `1e-5`, cosine decay and CPU
+Defaults: micro batch 1, accumulation 128, length 65536, learning rate `1e-5`, cosine decay and CPU
 optimizer offload. 35B expert DP = 32/(ETP1×EP8×PP4) = 1; CP is not multiplied into that expert grid.
 Boolean sequence parallelism operates inside TP groups, not as another GPU dimension.
 
@@ -88,7 +88,7 @@ Exact defaults and additional parameters are in the [complete index](../docs/CON
 | CP / SP | `CP_COMM_TYPE=p2p`, `USE_MCORE_GDN=1`; `SEQUENCE_PARALLEL=true` when TP>1 |
 | Batch | `MICRO_BATCH_SIZE=1` (fallback `PER_DEVICE_TRAIN_BATCH_SIZE`), `GLOBAL_BATCH_SIZE=128` |
 | Accumulation | Derived from global batch/(DP×micro batch); conflicting `GRADIENT_ACCUMULATION_STEPS` is rejected |
-| Duration | `NUM_TRAIN_EPOCHS=2`; nonempty `TRAIN_ITERS` takes precedence |
+| Duration | Configured through scripts/environment; `TRAIN_ITERS` selects a fixed-step budget |
 | Length | `MAX_LENGTH=65536`, `TRUNCATION_STRATEGY=right` |
 | Optimizer | `LEARNING_RATE=1e-5`, `MIN_LR=0`, `WARMUP_RATIO=0.03`, `WEIGHT_DECAY=0.1`, `MAX_GRAD_NORM=1.0` |
 | Objective | `TRAIN_USER_LOSS=true`, `LOSS_SCALE=default`, `PACKING=false`, `PADDING_FREE=false` |
