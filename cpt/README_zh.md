@@ -25,15 +25,19 @@ Swift 补丁，并在 `cpt/ms-swift-venv` 安装训练依赖，不必手工克�
 
 | 模型 | 启动脚本 | 节点 × GPU | 并行配置 | Dense DP | micro batch | 全局 batch | 累计步数 |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: |
-| 4B | `train_qwen35_4b_cpt_64gpu.sh` | 8 × 8 | HF SP4、ZeRO-1 | 16 | 1 | 512 | 32 |
+| 4B | `train_qwen35_4b_cpt_64gpu.sh` | 8 × 8 | HF SP4、ZeRO-1 | 16 | 1 | 1024 | 64 |
 | 9B | `train_qwen35_9b_cpt_64gpu.sh` | 8 × 8 | TP4 / PP1 / CP1 | 16 | 1 | 1024 | 64 |
 | 27B | `train_qwen35_27b_cpt_128gpu.sh` | 16 × 8 | TP8 / PP1 / CP1 | 16 | 1 | 1024 | 64 |
-| 35B-A3B | `train_qwen35_35b_a3b_cpt_128gpu.sh` | 16 × 8 | TP2 / PP8 / CP1 / EP8 / ETP1 | 8 | 1 | 16 | 2 |
+| 35B-A3B | `train_qwen35_35b_a3b_cpt_128gpu.sh` | 16 × 8 | TP2 / PP8 / CP1 / EP2 / ETP1 / SP | 8 | 1 | 1024 | 128 |
 
-共同默认：`NUM_TRAIN_EPOCHS=1`、`MAX_LENGTH=32768`、`LEARNING_RATE=2e-5`，左侧截断。
-Megatron 的 Dense DP = 总 GPU / (TP × PP × CP)，累计步数 = 全局 batch / (DP × micro batch)。
+共同默认：`MAX_LENGTH=32768`、`LEARNING_RATE=2e-5`，左侧截断。
+Megatron 的 dense/attention DP = 总 GPU / (TP × PP × CP)，累计步数 = 全局 batch / (dense DP × micro batch)。
 EP 不应再次除入 Dense DP。4B 的 HF SP 是独立切分机制；Megatron 的布尔 SP 在 TP 组内运行。
-35B-A3B 使用 PP8，每个 stage 5 层，不需要特殊尾层配置。
+所有 CPT 推荐入口的 GBS 均为 1024。4B 基于原始 multinode 脚本将 GPU 从 128 减为 64，
+梯度累计从 32 加倍到 64，保持 GBS 不变。35B 推荐入口采用 Megatron 拓扑，dense DP8、expert DP8、累计128。
+`train_qwen35_35b_a3b_cpt_128gpu.sh` 使用 TP2/PP8/CP1/EP2/ETP1、SP=true，dense/attention DP8、
+expert DP8、micro batch 1、GBS1024、累计128。EP 不是 dense DP 的额外除数，而是独立的专家并行组。
+不同后端的拓扑配置不能混用。
 
 ## 数据与 loss mask
 
@@ -78,7 +82,7 @@ DRY_RUN=1 bash cpt/train_qwen35_9b_cpt_64gpu.sh
 
 ### 缓存预处理
 
-4B/9B/27B 默认读取缓存。如果还没有缓存，使用上面的 `USE_CACHED_DATASET=false`。
+全部推荐入口默认读取缓存。如果还没有缓存，使用上面的 `USE_CACHED_DATASET=false`。
 也可先进行单进程导出，`OUTPUT_DIR` 在导出时表示缓存目录，而不是训练 checkpoint 目录：
 
 ```bash
@@ -88,8 +92,7 @@ bash cpt/preprocess_cpt_cache.sh
 ```
 
 随后设置 `USE_CACHED_DATASET=true CACHED_DATASET=/path/to/cache/cpt-9b/train`。
-预处理需要完整的本地模型/tokenizer，脚本使用离线加载。35B-A3B 当前入口直接使用
-`DATASET_PATH`，不提供与 Dense 入口相同的缓存选择接口。
+预处理需要完整的本地模型/tokenizer，脚本使用离线加载。35B Megatron 入口直接使用 `DATASET_PATH`。
 **修改模型模板、长度、loss mask、补丁或 TRAIN_USER_LOSS 后重新导出缓存**，旧 labels 不会自动改变。
 
 ## 参数覆盖
@@ -100,28 +103,28 @@ bash cpt/preprocess_cpt_cache.sh
 | 类别 | 参数与默认值 / 用途 |
 | --- | --- |
 | 模型与数据 | `MODEL_PATH`：完整 HF 模型；`DATASET_PATH`：JSONL/匹配模式，必须加引号避免提前展开 |
-| 输出与缓存 | `OUTPUT_DIR`、`CACHE_ROOT`；4B/9B/27B 的 `USE_CACHED_DATASET`、`CACHED_DATASET`、`CACHED_DATASET_ROOT` |
+| 输出与缓存 | `OUTPUT_DIR`、`CACHE_ROOT`；全部推荐入口的 `USE_CACHED_DATASET`、`CACHED_DATASET`、`CACHED_DATASET_ROOT` |
 | 环境路径 | `PROJECT_ROOT`、`CODE_ROOT`、`SWIFT_ROOT`、`SWIFT_VENV`；默认按仓库目录定位 |
 | 节点 | `NNODES`、`NODE_RANK`、`RESOURCE_GPU`、`NPROC_PER_NODE`、`CUDA_VISIBLE_DEVICES`、`MASTER_ADDR/MASTER_PORT` |
-| 数据目标 | `TRAIN_USER_LOSS=true`；4B `LOSS_SCALE=default`，不要在不了解 loss scale 交互时更改 |
+| 数据目标 | `TRAIN_USER_LOSS=true`；HF 4B `LOSS_SCALE=default`，不要在不了解 loss scale 交互时更改 |
 | 长度 | `MAX_LENGTH=32768`、`TRUNCATION_STRATEGY=left` |
-| 训练时长 | `NUM_TRAIN_EPOCHS=1`；Megatron `TRAIN_ITERS` 非空时优先按步数训练 |
-| 4B batch | `PER_DEVICE_TRAIN_BATCH_SIZE=1`、`GRADIENT_ACCUMULATION_STEPS=32`、`SEQUENCE_PARALLEL_SIZE=4`；不是通过 `GLOBAL_BATCH_SIZE` 设置 |
+| 训练时长 | 由脚本/环境配置；Megatron 支持 `TRAIN_ITERS` |
+| HF batch | 4B：micro batch 1、累计64、SP4；冲突的累计值会报错 |
 | Megatron batch | `MICRO_BATCH_SIZE=1`、`GLOBAL_BATCH_SIZE` 按表；总 batch 必须能被 DP × micro batch 整除 |
-| Megatron 拓扑 | `TENSOR_MODEL_PARALLEL_SIZE`、`PIPELINE_MODEL_PARALLEL_SIZE`、`CONTEXT_PARALLEL_SIZE`；MoE 另有 `EXPERT_MODEL_PARALLEL_SIZE`、`EXPERT_TENSOR_PARALLEL_SIZE` |
+| Megatron 拓扑 | `TENSOR_MODEL_PARALLEL_SIZE`、`PIPELINE_MODEL_PARALLEL_SIZE`、`CONTEXT_PARALLEL_SIZE`；35B Megatron 替代入口另有 `EXPERT_MODEL_PARALLEL_SIZE`、`EXPERT_TENSOR_PARALLEL_SIZE` |
 | Dense 拓扑检查 | 9B/27B 默认验证目标节点数；改变默认网格需 `ALLOW_TOPOLOGY_OVERRIDE=true`，不会绕过其他可整除性要求 |
-| 学习率 | `LEARNING_RATE=2e-5`；Megatron `MIN_LR=2e-6`、`LR_WARMUP_FRACTION=0.03`；4B `WARMUP_RATIO=0.03` |
-| 保存 | `SAVE_STEPS`：4B 100，9B/27B 500，35B 200；4B 另有 `SAVE_TOTAL_LIMIT=100` |
+| 学习率 | `LEARNING_RATE=2e-5`；Megatron `MIN_LR=2e-6`、`LR_WARMUP_FRACTION=0.03`；HF 4B `WARMUP_RATIO=0.03` |
+| 保存 | `SAVE_STEPS`：HF 4B 100，9B/27B 500，35B Megatron 200；HF 另有 `SAVE_TOTAL_LIMIT=100` |
 | 数据线程 | `DATASET_NUM_PROC`、`DATALOADER_NUM_WORKERS`；导出默认 16 个数据进程，训练默认 8 |
 | 重用缓存 | `LOAD_FROM_CACHE_FILE=false`（训练）；不是 `USE_CACHED_DATASET` 的同义词 |
-| 4B 性能 | `DEEPSPEED=zero1`、`ATTN_IMPL=flash_attn`、`PACKING=false`、`PADDING_FREE=false`、`GROUP_BY_LENGTH=false` |
-| Megatron offload | `OPTIMIZER_CPU_OFFLOAD`：9B/27B false，35B true；`OPTIMIZER_OFFLOAD_FRACTION=1`、`USE_PRECISION_AWARE_OPTIMIZER=true` |
+| HF 性能 | `DEEPSPEED=zero1`、`ATTN_IMPL=flash_attn`、`PACKING=false`、`GROUP_BY_LENGTH=false`；4B 的 `PADDING_FREE=false` |
+| Megatron offload | `OPTIMIZER_CPU_OFFLOAD`：9B/27B false，35B Megatron true；`OPTIMIZER_OFFLOAD_FRACTION=1`、`USE_PRECISION_AWARE_OPTIMIZER=true` |
 | Dense 验证 | `NCCL_PREFLIGHT_ONLY=true` 运行 GPU/通信检查；只有同时 dry-run 才不启动 worker |
 
 示例：9B 使用不同全局 batch 和训练时长：
 
 ```bash
-GLOBAL_BATCH_SIZE=512 NUM_TRAIN_EPOCHS=1 TRAIN_ITERS= \
+GLOBAL_BATCH_SIZE=1024 TRAIN_ITERS= \
 bash cpt/train_qwen35_9b_cpt_64gpu.sh
 ```
 
@@ -132,4 +135,5 @@ Megatron CPT 入口设置 `save_safetensors=false`，不要把输出目录默认
 权重格式和拓扑转换说明见 [SFT 指南](../sft_code/README_zh.md)。
 
 兼容别名 `train_cpt_swift.sh`、`train_cpt_megatron_dense.sh`、`train_cpt_megatron_moe.sh`
-分别指向 4B、27B、35B 的多机入口，不是单节点 smoke 脚本。
+分别指向 4B HF、27B Megatron、35B Megatron 入口，不是单节点 smoke 脚本；
+35B 推荐入口为 `train_qwen35_35b_a3b_cpt_128gpu.sh`。
