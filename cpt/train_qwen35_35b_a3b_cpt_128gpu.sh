@@ -4,10 +4,11 @@ set -euo pipefail
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   cat <<'USAGE'
 Qwen3.5-35B-A3B CPT: 16 nodes x 8 GPUs = 128 GPUs; NUM_TRAIN_EPOCHS=1.
-Megatron MoE: TP=2, PP=8, CP=1, EP=8, ETP=1, SP=true, dense DP=8, global batch=16.
+Megatron MoE: TP=2, PP=8, CP=1, EP=2, ETP=1, SP=true, dense/attention DP=8, expert DP=8, GBS=1024, accumulation=128.
+This is the Megatron-SWIFT MoE profile for 35B-A3B CPT.
 Run once per node, with NNODES=16, NODE_RANK=<rank> and MASTER_ADDR=<rank-0-host>.
 WORLD_SIZE/RANK are supported node-count/node-rank aliases, not worker counts.
-Set MODEL_PATH, DATASET_PATH (or CACHED_DATASET), SWIFT_ROOT and SWIFT_VENV.
+Set MODEL_PATH, DATASET_PATH, SWIFT_ROOT and SWIFT_VENV.
 DRY_RUN=1 prints the resolved command without loading dependencies or launching workers.
 See cpt/README.md for data, cache, topology and environment requirements.
 USAGE
@@ -76,11 +77,11 @@ TRUNCATION_STRATEGY="${TRUNCATION_STRATEGY:-left}"
 NUM_TRAIN_EPOCHS="${NUM_TRAIN_EPOCHS:-1}"
 TRAIN_ITERS="${TRAIN_ITERS:-}"
 MICRO_BATCH_SIZE="${MICRO_BATCH_SIZE:-1}"
-GLOBAL_BATCH_SIZE="${GLOBAL_BATCH_SIZE:-16}"
+GLOBAL_BATCH_SIZE="${GLOBAL_BATCH_SIZE:-1024}"
 TENSOR_MODEL_PARALLEL_SIZE="${TENSOR_MODEL_PARALLEL_SIZE:-2}"
 # Qwen3.5-35B-A3B has 40 layers: eight stages give five layers per stage.
 PIPELINE_MODEL_PARALLEL_SIZE="${PIPELINE_MODEL_PARALLEL_SIZE:-8}"
-EXPERT_MODEL_PARALLEL_SIZE="${EXPERT_MODEL_PARALLEL_SIZE:-8}"
+EXPERT_MODEL_PARALLEL_SIZE="${EXPERT_MODEL_PARALLEL_SIZE:-2}"
 EXPERT_TENSOR_PARALLEL_SIZE="${EXPERT_TENSOR_PARALLEL_SIZE:-1}"
 # Leave empty for even pipeline partitioning; explicit uneven layouts are checked below.
 DECODER_LAST_PIPELINE_NUM_LAYERS="${DECODER_LAST_PIPELINE_NUM_LAYERS:-}"
@@ -155,6 +156,7 @@ if (( WORLD_SIZE_TOTAL % EXPERT_PARALLEL_PRODUCT != 0 )); then
   exit 1
 fi
 DATA_PARALLEL_SIZE=$((WORLD_SIZE_TOTAL / MODEL_PARALLEL_SIZE))
+EXPERT_DATA_PARALLEL_SIZE=$((WORLD_SIZE_TOTAL / EXPERT_PARALLEL_PRODUCT))
 STEP_BATCH_SIZE=$((MICRO_BATCH_SIZE * DATA_PARALLEL_SIZE))
 if (( GLOBAL_BATCH_SIZE % STEP_BATCH_SIZE != 0 )); then
   echo "GLOBAL_BATCH_SIZE=${GLOBAL_BATCH_SIZE} must be divisible by MICRO_BATCH_SIZE*DP=${STEP_BATCH_SIZE}" >&2
@@ -285,7 +287,7 @@ echo "  output: ${OUTPUT_DIR}"
 echo "  nodes/rank: ${NNODES}/${NODE_RANK}"
 echo "  nproc_per_node: ${NPROC_PER_NODE}"
 echo "  master: ${MASTER_ADDR}:${MASTER_PORT}"
-echo "  world_size: ${WORLD_SIZE_TOTAL}, dp: ${DATA_PARALLEL_SIZE}"
+echo "  world_size: ${WORLD_SIZE_TOTAL}, dense/attention dp: ${DATA_PARALLEL_SIZE}, expert dp: ${EXPERT_DATA_PARALLEL_SIZE}"
 echo "  max_length: ${MAX_LENGTH}"
 echo "  parallel: TP=${TENSOR_MODEL_PARALLEL_SIZE} PP=${PIPELINE_MODEL_PARALLEL_SIZE} EP=${EXPERT_MODEL_PARALLEL_SIZE} ETP=${EXPERT_TENSOR_PARALLEL_SIZE} SP=true CP=${CONTEXT_PARALLEL_SIZE}"
 echo "  decoder_last_pipeline_num_layers: ${DECODER_LAST_PIPELINE_NUM_LAYERS:-even partition}"
