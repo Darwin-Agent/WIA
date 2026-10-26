@@ -39,11 +39,11 @@ bash rl_miles/install_official_miles_env.sh
 MoE expert DP 在当前 MCore rank grid 下为 actor GPU/(ETP×EP×PP)：35B 为 2，122B 为 1。
 异步包装器固定 `train_async.py`，不支持 `COLOCATE=1`。
 
-| 模型 | rollout batch（prompt 数） | 每 prompt 样本数 | 全局 batch | epoch | prompt / response token | 总长度 |
-| --- | ---: | ---: | ---: | ---: | --- | ---: |
-| 4B | 128 | 8 | 1024 | 1 | 32768 / 8192 | 40960 |
-| 9B / 27B / 35B-A3B | 256 | 8 | 2048 | 1 | 32768 / 8192 | 40960 |
-| 122B-A10B | 256 | 8 | 2048 | 2 | 32768 / 10240 | 43008 |
+| 模型 | rollout batch（prompt 数） | 每 prompt 样本数 | 全局 batch | prompt / response token | 总长度 |
+| --- | ---: | ---: | ---: | --- | ---: |
+| 4B | 128 | 8 | 1024 | 32768 / 8192 | 40960 |
+| 9B / 27B / 35B-A3B | 256 | 8 | 2048 | 32768 / 8192 | 40960 |
+| 122B-A10B | 256 | 8 | 2048 | 32768 / 10240 | 43008 |
 
 默认 micro batch 参数为 1；`QKV_FORMAT=thd` 启用动态 batch，实际 microbatch 划分受 token
 预算与长度影响。不要把 rollout batch 当作单条序列的 token 数，也不要用静态累计公式推算调度。
@@ -159,7 +159,7 @@ judge 给出六个 1–5 分维度，按 `format:1,factuality:2,consistency:2,re
 
 | 类别 | 参数与默认值 / 用途 |
 | --- | --- |
-| Batch / 时长 | `ROLLOUT_BATCH_SIZE`、`N_SAMPLES_PER_PROMPT`、`GLOBAL_BATCH_SIZE`、`NUM_EPOCH` 按表；非空 `NUM_ROLLOUT` 优先 |
+| Batch / 时长 | `ROLLOUT_BATCH_SIZE`、`N_SAMPLES_PER_PROMPT`、`GLOBAL_BATCH_SIZE` 按表；非空 `NUM_ROLLOUT` 优先 |
 | 长度 | `MAX_PROMPT_TOKENS`、`MAX_RESPONSE_TOKENS`、`SEQ_LEN` 按表；响应预算受总长度限制 |
 | 优化 | `LEARNING_RATE=1e-6`、`CLIP_GRAD=1`；前四模型 `LR_DECAY_STYLE=constant`、`MIN_LR=0`，122B 为 cosine / `1e-7` |
 | KL | 前四模型 `USE_KL_LOSS=0`、`KL_LOSS_COEF=0`；122B 为 1 / 0.01；可设 `REF_LOAD` |
