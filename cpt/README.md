@@ -25,15 +25,21 @@ Models, datasets and multi-node resources are separate prerequisites; see [insta
 
 | Model | Launcher | Nodes × GPUs | Parallelism | Dense DP | Micro batch | Global batch | Accumulation |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: |
-| 4B | `train_qwen35_4b_cpt_64gpu.sh` | 8 × 8 | HF SP4, ZeRO-1 | 16 | 1 | 512 | 32 |
+| 4B | `train_qwen35_4b_cpt_64gpu.sh` | 8 × 8 | HF SP4, ZeRO-1 | 16 | 1 | 1024 | 64 |
 | 9B | `train_qwen35_9b_cpt_64gpu.sh` | 8 × 8 | TP4 / PP1 / CP1 | 16 | 1 | 1024 | 64 |
 | 27B | `train_qwen35_27b_cpt_128gpu.sh` | 16 × 8 | TP8 / PP1 / CP1 | 16 | 1 | 1024 | 64 |
-| 35B-A3B | `train_qwen35_35b_a3b_cpt_128gpu.sh` | 16 × 8 | TP2 / PP8 / CP1 / EP8 / ETP1 | 8 | 1 | 16 | 2 |
+| 35B-A3B | `train_qwen35_35b_a3b_cpt_128gpu.sh` | 16 × 8 | TP2 / PP8 / CP1 / EP2 / ETP1 / SP | 8 | 1 | 1024 | 128 |
 
-All profiles default to `NUM_TRAIN_EPOCHS=1`, `MAX_LENGTH=32768`, `LEARNING_RATE=2e-5` and left truncation.
-For Megatron, Dense DP = GPUs/(TP×PP×CP); accumulation = global batch/(DP×micro batch).
-Do not divide Dense DP by EP again. HF SP is a separate sequence-sharding mechanism;
-Megatron's boolean sequence parallelism operates inside TP groups. The MoE PP8 profile assigns five layers per stage.
+All profiles default to `MAX_LENGTH=32768`, `LEARNING_RATE=2e-5` and left truncation.
+For Megatron, dense/attention DP = GPUs/(TP×PP×CP); accumulation = global batch/(dense DP×micro batch).
+Do not divide Dense DP by EP again. HF SP for 4B is a separate sequence-sharding mechanism;
+Megatron's boolean sequence parallelism operates inside TP groups.
+All recommended CPT profiles use GBS 1024. The 4B profile halves the original multinode allocation from 128 to 64 GPUs
+and doubles accumulation from 32 to 64, preserving GBS. The 35B Megatron profile uses dense DP8,
+expert DP8 and accumulation128.
+`train_qwen35_35b_a3b_cpt_128gpu.sh` uses TP2/PP8/CP1/EP2/ETP1, SP=true, dense/attention DP8,
+expert DP8, micro batch1, GBS1024 and accumulation128. EP is not an additional divisor of dense DP;
+it creates a separate expert-parallel group. Do not mix topology settings from different backends.
 
 ## Data and loss masks
 
@@ -78,7 +84,7 @@ they must agree with `NNODES/NODE_RANK` when both are supplied.
 
 ### Precompute caches
 
-4B/9B/27B read cached data by default. Set `USE_CACHED_DATASET=false` for direct JSONL loading, or export a cache first:
+All recommended profiles read cached data by default. Set `USE_CACHED_DATASET=false` for direct JSONL loading, or export a cache first:
 
 ```bash
 MODEL_PATH=/path/to/qwen35-9b-hf DATASET_PATH='/path/to/cpt/*.jsonl' \
@@ -89,7 +95,7 @@ bash cpt/preprocess_cpt_cache.sh
 Here `OUTPUT_DIR` means the exported cache, not checkpoints. Then train with
 `USE_CACHED_DATASET=true CACHED_DATASET=/path/to/cache/cpt-9b/train`.
 Export is single-process, requires complete local model/tokenizer files and uses offline loading.
-35B-A3B reads `DATASET_PATH` directly; it does not expose the Dense cached-data selection interface.
+The 35B Megatron profile reads `DATASET_PATH` directly.
 **Regenerate caches after changing the template, length, masks, patches or TRAIN_USER_LOSS.** Old labels are not rewritten.
 
 ## Overrides
@@ -100,28 +106,28 @@ for exact default expressions and scope. Do not assume arbitrary CLI flags are f
 | Category | Variables and defaults |
 | --- | --- |
 | Model/data | `MODEL_PATH`: complete HF model; `DATASET_PATH`: JSONL/glob, quote globs to avoid premature expansion |
-| Outputs/cache | `OUTPUT_DIR`, `CACHE_ROOT`; 4B/9B/27B: `USE_CACHED_DATASET`, `CACHED_DATASET`, `CACHED_DATASET_ROOT` |
+| Outputs/cache | `OUTPUT_DIR`, `CACHE_ROOT`; all recommended profiles: `USE_CACHED_DATASET`, `CACHED_DATASET`, `CACHED_DATASET_ROOT` |
 | Environment | `PROJECT_ROOT`, `CODE_ROOT`, `SWIFT_ROOT`, `SWIFT_VENV`; repository-relative defaults |
 | Nodes | `NNODES`, `NODE_RANK`, `RESOURCE_GPU`, `NPROC_PER_NODE`, `CUDA_VISIBLE_DEVICES`, `MASTER_ADDR/MASTER_PORT` |
-| Objective | `TRAIN_USER_LOSS=true`; 4B `LOSS_SCALE=default`; understand interactions before changing loss scaling |
+| Objective | `TRAIN_USER_LOSS=true`; HF 4B `LOSS_SCALE=default`; understand interactions before changing loss scaling |
 | Length | `MAX_LENGTH=32768`, `TRUNCATION_STRATEGY=left` |
-| Duration | `NUM_TRAIN_EPOCHS=1`; nonempty Megatron `TRAIN_ITERS` takes precedence |
-| 4B batch | `PER_DEVICE_TRAIN_BATCH_SIZE=1`, `GRADIENT_ACCUMULATION_STEPS=32`, `SEQUENCE_PARALLEL_SIZE=4`; not `GLOBAL_BATCH_SIZE` |
+| Duration | Configured through scripts/environment; Megatron supports `TRAIN_ITERS` |
+| HF batch | 4B: micro batch1, accumulation64, SP4; conflicting accumulation is rejected |
 | Megatron batch | `MICRO_BATCH_SIZE=1`, `GLOBAL_BATCH_SIZE` from table; require divisibility by DP×micro batch |
-| Megatron topology | `TENSOR_MODEL_PARALLEL_SIZE`, `PIPELINE_MODEL_PARALLEL_SIZE`, `CONTEXT_PARALLEL_SIZE`; MoE adds `EXPERT_MODEL_PARALLEL_SIZE`, `EXPERT_TENSOR_PARALLEL_SIZE` |
+| Megatron topology | `TENSOR_MODEL_PARALLEL_SIZE`, `PIPELINE_MODEL_PARALLEL_SIZE`, `CONTEXT_PARALLEL_SIZE`; the 35B Megatron entry adds `EXPERT_MODEL_PARALLEL_SIZE`, `EXPERT_TENSOR_PARALLEL_SIZE` |
 | Dense topology guard | 9B/27B require `ALLOW_TOPOLOGY_OVERRIDE=true` for nondefault grids; other divisibility constraints still apply |
-| Learning rate | `LEARNING_RATE=2e-5`; Megatron `MIN_LR=2e-6`, `LR_WARMUP_FRACTION=0.03`; 4B `WARMUP_RATIO=0.03` |
-| Saving | `SAVE_STEPS`: 4B 100, 9B/27B 500, 35B 200; 4B also `SAVE_TOTAL_LIMIT=100` |
+| Learning rate | `LEARNING_RATE=2e-5`; Megatron `MIN_LR=2e-6`, `LR_WARMUP_FRACTION=0.03`; HF 4B `WARMUP_RATIO=0.03` |
+| Saving | `SAVE_STEPS`: HF 4B 100, 9B/27B 500, 35B Megatron 200; HF also `SAVE_TOTAL_LIMIT=100` |
 | Data workers | `DATASET_NUM_PROC`, `DATALOADER_NUM_WORKERS`; export defaults to 16 data processes, training to 8 |
 | Processing cache | Training `LOAD_FROM_CACHE_FILE=false`; not synonymous with `USE_CACHED_DATASET` |
-| 4B performance | `DEEPSPEED=zero1`, `ATTN_IMPL=flash_attn`, `PACKING=false`, `PADDING_FREE=false`, `GROUP_BY_LENGTH=false` |
-| Megatron offload | `OPTIMIZER_CPU_OFFLOAD`: false for 9B/27B, true for 35B; `OPTIMIZER_OFFLOAD_FRACTION=1`, `USE_PRECISION_AWARE_OPTIMIZER=true` |
+| HF performance | `DEEPSPEED=zero1`, `ATTN_IMPL=flash_attn`, `PACKING=false`, `GROUP_BY_LENGTH=false`; `PADDING_FREE=false` for 4B |
+| Megatron offload | `OPTIMIZER_CPU_OFFLOAD`: false for 9B/27B, true for 35B Megatron; `OPTIMIZER_OFFLOAD_FRACTION=1`, `USE_PRECISION_AWARE_OPTIMIZER=true` |
 | Dense preflight | `NCCL_PREFLIGHT_ONLY=true` launches GPU/communication workers unless also in dry-run mode |
 
 Example, after configuring paths/nodes:
 
 ```bash
-GLOBAL_BATCH_SIZE=512 NUM_TRAIN_EPOCHS=1 TRAIN_ITERS= \
+GLOBAL_BATCH_SIZE=1024 TRAIN_ITERS= \
 bash cpt/train_qwen35_9b_cpt_64gpu.sh
 ```
 
@@ -130,4 +136,5 @@ bash cpt/train_qwen35_9b_cpt_64gpu.sh
 Megatron CPT sets `save_safetensors=false`; do not assume its checkpoint directory is a full HF export.
 Use a compatible native checkpoint or export HF config/tokenizer/weights before [SFT](../sft_code/README.md).
 Compatibility aliases `train_cpt_swift.sh`, `train_cpt_megatron_dense.sh`, `train_cpt_megatron_moe.sh`
-select the multi-node 4B, 27B and 35B entries, not single-node smoke profiles.
+select 4B HF, 27B Megatron and 35B Megatron, not single-node smoke profiles.
+The recommended 35B entry is `train_qwen35_35b_a3b_cpt_128gpu.sh`.
