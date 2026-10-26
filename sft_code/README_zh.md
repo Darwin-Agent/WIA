@@ -31,7 +31,7 @@ Megatron 源码放在该目录**不代表 SFT 需要安装 Miles RL 环境或部
 | 27B | `train_qwen35_27b_sft_64gpu.sh` | 8 × 8 | 4 / 4 / 4 | 1 / 1 | 1 | 128 |
 | 35B-A3B | `train_qwen35_35b_a3b_sft_32gpu.sh` | 4 × 8 | 2 / 4 / 4 | 8 / 1 | 1 | 128 |
 
-共同默认：epoch 2、micro batch 1、累计 128、长度 65536、学习率 `1e-5`、cosine 调度、
+共同默认：micro batch 1、累计 128、长度 65536、学习率 `1e-5`、cosine 调度、
 CPU optimizer offload。35B-A3B 的 expert DP = 32 / (ETP1 × EP8 × PP4) = 1；这里不再乘 CP。
 Megatron 布尔 SP 在 TP 组内运行，不增加 GPU 维度。
 
@@ -90,7 +90,7 @@ DRY_RUN=1 bash sft_code/train_qwen35_27b_sft_64gpu.sh
 | CP / SP | `CP_COMM_TYPE=p2p`；`USE_MCORE_GDN=1`；TP>1 时 `SEQUENCE_PARALLEL=true` |
 | Batch | `MICRO_BATCH_SIZE=1`（可从 `PER_DEVICE_TRAIN_BATCH_SIZE` 取值）、`GLOBAL_BATCH_SIZE=128` |
 | 累计 | 由全局 batch/(DP×micro batch) 推导；不要设置冲突的 `GRADIENT_ACCUMULATION_STEPS` |
-| 时长 | `NUM_TRAIN_EPOCHS=2`；非空 `TRAIN_ITERS` 优先按步数训练 |
+| 时长 | 由脚本/环境配置；`TRAIN_ITERS` 指定固定步数预算 |
 | 长度 | `MAX_LENGTH=65536`、`TRUNCATION_STRATEGY=right` |
 | 优化 | `LEARNING_RATE=1e-5`、`MIN_LR=0`、`WARMUP_RATIO=0.03`、`WEIGHT_DECAY=0.1`、`MAX_GRAD_NORM=1.0` |
 | 数据目标 | `TRAIN_USER_LOSS=true`、`LOSS_SCALE=default`；`PACKING=false`、`PADDING_FREE=false` |
