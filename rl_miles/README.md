@@ -40,11 +40,11 @@ Each node has 8 GPUs; rollout always uses 64 GPUs. Scoring services need additio
 Dense DP = actor GPUs/(TP×PP×CP). Expert DP uses actor GPUs/(ETP×EP×PP): 2 for 35B, 1 for 122B.
 Wrappers select `train_async.py`; `COLOCATE=1` is unsupported.
 
-| Model | Rollout batch (prompts) | Samples/prompt | Global batch | Epochs | Prompt / response tokens | Sequence length |
-| --- | ---: | ---: | ---: | ---: | --- | ---: |
-| 4B | 128 | 8 | 1024 | 1 | 32768 / 8192 | 40960 |
-| 9B / 27B / 35B-A3B | 256 | 8 | 2048 | 1 | 32768 / 8192 | 40960 |
-| 122B-A10B | 256 | 8 | 2048 | 2 | 32768 / 10240 | 43008 |
+| Model | Rollout batch (prompts) | Samples/prompt | Global batch | Prompt / response tokens | Sequence length |
+| --- | ---: | ---: | ---: | --- | ---: |
+| 4B | 128 | 8 | 1024 | 32768 / 8192 | 40960 |
+| 9B / 27B / 35B-A3B | 256 | 8 | 2048 | 32768 / 8192 | 40960 |
+| 122B-A10B | 256 | 8 | 2048 | 32768 / 10240 | 43008 |
 
 Micro batch is set to 1, but `QKV_FORMAT=thd` enables dynamic batching. Token budgets and sequence lengths determine
 actual partitions; rollout batch is a prompt count, not a token count, and static accumulation arithmetic is insufficient.
@@ -159,7 +159,7 @@ Direct reward-module users configure WM names. The retry/timeout/skip controls a
 
 | Category | Variables and defaults |
 | --- | --- |
-| Batch/duration | `ROLLOUT_BATCH_SIZE`, `N_SAMPLES_PER_PROMPT`, `GLOBAL_BATCH_SIZE`, `NUM_EPOCH` from table; nonempty `NUM_ROLLOUT` takes precedence |
+| Batch/duration | `ROLLOUT_BATCH_SIZE`, `N_SAMPLES_PER_PROMPT`, `GLOBAL_BATCH_SIZE` from table; nonempty `NUM_ROLLOUT` takes precedence |
 | Length | `MAX_PROMPT_TOKENS`, `MAX_RESPONSE_TOKENS`, `SEQ_LEN`; response budget is constrained by total context |
 | Optimizer | `LEARNING_RATE=1e-6`, `CLIP_GRAD=1`; smaller models `LR_DECAY_STYLE=constant`, `MIN_LR=0`; 122B cosine / `1e-7` |
 | KL | Smaller models `USE_KL_LOSS=0`, `KL_LOSS_COEF=0`; 122B 1 / 0.01; optional `REF_LOAD` |
