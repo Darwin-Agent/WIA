@@ -220,7 +220,7 @@
 
   function getLang() {
     try {
-      return normalizeLang(localStorage.getItem(STORAGE_KEY) || DEFAULT_LANG);
+      return normalizeLang(sessionStorage.getItem(STORAGE_KEY) || DEFAULT_LANG);
     } catch (e) {
       return DEFAULT_LANG;
     }
@@ -366,7 +366,7 @@
     if (next === currentLang) return currentLang;
     currentLang = next;
     try {
-      localStorage.setItem(STORAGE_KEY, currentLang);
+      sessionStorage.setItem(STORAGE_KEY, currentLang);
     } catch (e) {}
     translateStatic(document);
     syncLanguageSwitch();
