@@ -8,6 +8,10 @@
 模型根据历史上下文预测下一条环境 Observation；训练覆盖持续预训练、
 监督微调和基于 Miles 的异步 GSPO，评测使用独立 LLM judge 对照真实反馈评分。
 
+<p align="center">
+  <a href="https://darwin-agent.github.io/WIA/"><img alt="Homepage" src="https://img.shields.io/badge/Homepage-WIA-ff6900?style=flat"/></a>
+</p>
+
 [快速开始](#快速开始) · [环境安装](ENVIRONMENT_zh.md) · [并行配置](#模型与资源) ·
 [完整参数参考](docs/CONFIGURATION_zh.md) · [服务部署](#需要哪些服务) · [文档导航](docs/README_zh.md)
 

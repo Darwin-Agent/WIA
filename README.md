@@ -8,6 +8,10 @@ Train Qwen3.5 language world models to predict the next environment observation 
 This repository provides continual pretraining, supervised fine-tuning, Miles-based async GSPO,
 reward services, and domain-aware evaluation in one source release.
 
+<p align="center">
+  <a href="https://darwin-agent.github.io/WIA/"><img alt="Homepage" src="https://img.shields.io/badge/Homepage-WIA-ff6900?style=flat"/></a>
+</p>
+
 [Quick start](#quick-start) · [Installation](ENVIRONMENT.md) · [Model configurations](#models-and-resources) ·
 [Configuration reference](docs/CONFIGURATION.md) · [Services](#required-services) · [Documentation](docs/README.md)
 
