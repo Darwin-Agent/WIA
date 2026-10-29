@@ -1,0 +1,49 @@
+name: Publish static homepage
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage public files only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _site/demos
+          cp index.html demos.html styles.css i18n.js demos.js .nojekyll _site/
+          for domain in android mcp os search swe terminal web; do
+            test ! -L "demos/$domain.mp4"
+            test -s "demos/$domain.mp4"
+            test "$(stat -c%s "demos/$domain.mp4")" -lt 100000000
+            cp "demos/$domain.mp4" _site/demos/
+          done
+          test -z "$(find _site -type l -print)"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

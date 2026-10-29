@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN" data-i18n-title-key="demos.title">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Demo · WIA</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="index.html"><span class="brand-mark">W</span></a>
+      <div class="nav-links">
+        <a href="index.html">首页</a>
+        <a href="demos.html" data-i18n="nav.demos">Demo</a>
+      </div>
+      <div class="nav-actions">
+        <a class="btn btn-light btn-sm" href="index.html" data-i18n="nav.home">首页</a>
+        <button type="button" class="lang-switch btn btn-outline-light btn-sm" data-i18n-aria-label="common.switch_language">EN</button>
+      </div>
+    </div>
+  </nav>
+
+  <header class="page-hero">
+    <div class="wrap">
+      <div class="eyebrow" data-i18n="demos.eyebrow">演示画廊</div>
+      <h1 data-i18n="demos.heading">七大领域演示</h1>
+      <div class="domain-tabs" id="domainTabs" role="group" data-i18n-aria-label="demos.domain_aria" aria-label="领域选择">
+        <button class="domain-tab active" type="button" data-domain="android"><span class="domain-icon">🤖</span><span>Android</span></button>
+        <button class="domain-tab" type="button" data-domain="mcp"><span class="domain-icon">🔌</span><span>MCP</span></button>
+        <button class="domain-tab" type="button" data-domain="os"><span class="domain-icon">🖥️</span><span>OS</span></button>
+        <button class="domain-tab" type="button" data-domain="search"><span class="domain-icon">🔍</span><span>Search</span></button>
+        <button class="domain-tab" type="button" data-domain="swe"><span class="domain-icon">🧑‍💻</span><span>SWE</span></button>
+        <button class="domain-tab" type="button" data-domain="terminal"><span class="domain-icon">⌨️</span><span>Terminal</span></button>
+        <button class="domain-tab" type="button" data-domain="web"><span class="domain-icon">🌐</span><span>Web</span></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap demo-page">
+    <section class="demo-shell">
+      <div class="demo-head">
+        <div>
+          <div class="demo-kicker" id="demoKicker">Android</div>
+          <h2 id="demoTitle">移动应用界面操作</h2>
+          <p id="demoDesc">点击、输入、滑动与 accessibility tree 状态演化。</p>
+        </div>
+        <a class="btn btn-ghost btn-sm" id="downloadBtn" href="demos/android.mp4" download data-i18n="demos.download">下载视频</a>
+      </div>
+
+      <div class="video-frame">
+        <video id="demoVideo" controls playsinline preload="metadata" aria-labelledby="demoTitle">
+          <source id="demoSource" src="demos/android.mp4" type="video/mp4" />
+        </video>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <span>WIA · World Intelligence Agent</span>
+      <a href="index.html" data-i18n="nav.back_home">返回首页 →</a>
+    </div>
+  </footer>
+
+  <script src="i18n.js"></script>
+  <script src="demos.js"></script>
+</body>
+</html>
