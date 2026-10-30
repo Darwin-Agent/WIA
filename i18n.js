@@ -1,7 +1,7 @@
 (function () {
   "use strict";
   const STORAGE_KEY = "wia_public_language";
-  const DEFAULT_LANG = "zh";
+  const DEFAULT_LANG = "en";
   const MESSAGES = {
   "zh": {
     "common.switch_language": "切换语言",
