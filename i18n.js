@@ -4,6 +4,7 @@
   const DEFAULT_LANG = "en";
   const MESSAGES = {
   "zh": {
+    "common.authored_by": "作者：",
     "common.switch_language": "切换语言",
     "common.switch_to_zh": "中文",
     "common.switch_to_en": "EN",
@@ -117,6 +118,7 @@
     "index.hero.explore": "探索资源"
   },
   "en": {
+    "common.authored_by": "By",
     "common.switch_language": "Switch language",
     "common.switch_to_zh": "中文",
     "common.switch_to_en": "EN",

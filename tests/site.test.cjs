@@ -48,6 +48,21 @@ test('the official paper title is consistent in page metadata, hero and paper re
   assert.ok(messages.en['index.meta_description'].includes(paperTitle));
 });
 
+test('Darwin Agent Team is credited in the hero, page metadata and both footers', () => {
+  const teamLink = /<a\b[^>]*href="https:\/\/github\.com\/Darwin-Agent"[^>]*data-i18n-skip[^>]*>Darwin Agent Team<\/a>/;
+  const hero = html.match(/<header class="hero">([\s\S]*?)<\/header>/)[1];
+  assert.match(hero, /class="hero-authors"/);
+  assert.match(hero, teamLink);
+  assert.equal(messages.en['common.authored_by'], 'By');
+  assert.equal(messages.zh['common.authored_by'], '作者：');
+  for (const file of ['index.html', 'demos.html']) {
+    const page = read(file);
+    assert.match(page, /<meta name="author" content="Darwin Agent Team" \/>/);
+    const footer = page.match(/<footer\b[^>]*>([\s\S]*?)<\/footer>/)[1];
+    assert.match(footer, teamLink, `${file} credits the team in its footer`);
+  }
+});
+
 test('all explicitly translated homepage and demo labels exist in both languages', () => {
   for (const file of ['index.html', 'demos.html']) {
     for (const [, key] of read(file).matchAll(/data-i18n(?:-(?:html|content|aria-label|title-key))?="([^"]+)"/g)) {
