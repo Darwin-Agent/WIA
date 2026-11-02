@@ -10,7 +10,7 @@ Qwen3.5 Megatron SFT: SFT_MODEL_SIZE=4b|9b|27b|35b_a3b (default: 9b).
 4B/9B:    1 x 8 GPUs, TP2/PP1/CP4, DP1.
 27B:      8 x 8 GPUs, TP4/PP4/CP4, DP1.
 35B-A3B:  4 x 8 GPUs, TP2/PP4/CP4/EP8/ETP1, Dense DP1, expert DP1.
-Defaults: global batch=128, micro batch=1, accumulation=128, epochs=2, length=65536.
+Defaults: global batch=128, micro batch=1, accumulation=128, epochs=2, length=81920.
 Megatron sequence_parallel=true within TP; it does not add another GPU dimension.
 GPU caps: 64 for 27B; 32 for the other sizes. Run this script once per node.
 Set MODEL_PATH, DATASET_PATH, SWIFT_ROOT and SWIFT_VENV; optional MEGATRON_ROOT
@@ -122,7 +122,7 @@ MICRO_BATCH_SIZE="${MICRO_BATCH_SIZE:-${PER_DEVICE_TRAIN_BATCH_SIZE:-1}}"
 GLOBAL_BATCH_SIZE="${GLOBAL_BATCH_SIZE:-128}"
 NUM_TRAIN_EPOCHS="${NUM_TRAIN_EPOCHS:-2}"
 TRAIN_ITERS="${TRAIN_ITERS:-}"
-MAX_LENGTH="${MAX_LENGTH:-65536}"
+MAX_LENGTH="${MAX_LENGTH:-81920}"
 TRUNCATION_STRATEGY="${TRUNCATION_STRATEGY:-right}"
 LEARNING_RATE="${LEARNING_RATE:-1e-5}"
 MIN_LR="${MIN_LR:-0}"
