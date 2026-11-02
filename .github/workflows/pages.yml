@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate public homepage
+        run: node --test tests/site.test.cjs
       - name: Stage public files only
         shell: bash
         run: |
@@ -28,6 +30,12 @@ jobs:
             test -s "demos/$domain.mp4"
             test "$(stat -c%s "demos/$domain.mp4")" -lt 100000000
             cp "demos/$domain.mp4" _site/demos/
+          done
+          for asset in WIA_promo_1080p.mp4 WIA_cover_1920x1080.png; do
+            test ! -L "demos/$asset"
+            test -s "demos/$asset"
+            test "$(stat -c%s "demos/$asset")" -lt 100000000
+            cp "demos/$asset" _site/demos/
           done
           test -z "$(find _site -type l -print)"
       - uses: actions/configure-pages@v5

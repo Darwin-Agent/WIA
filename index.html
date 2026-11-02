@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'" />
   <meta name="referrer" content="no-referrer" />
-  <title>WIA · World Intelligence Agent</title>
-  <meta name="description" data-i18n-content="index.meta_description" content="WIA is a foundational world model for digital agents, unifying seven digital environments and connecting prediction with action." />
+  <title>World Intelligence Agent: Unifying World Modeling and Action Learning for Digital Agents</title>
+  <meta name="description" data-i18n-content="index.meta_description" content="World Intelligence Agent: Unifying World Modeling and Action Learning for Digital Agents. WIA unifies seven digital environments, connecting world modeling with action learning." />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -39,15 +39,33 @@
   <header class="hero">
     <div class="wrap hero-inner">
       <div class="eyebrow">Foundation World Model for Digital Agents</div>
-      <h1 data-i18n-html="index.hero.title">World<br /><span class="grad">Intelligence Agent</span></h1>
+      <h1 data-i18n-html="index.hero.title">World<br /> <span class="grad">Intelligence Agent:</span> <span class="hero-paper-subtitle">Unifying World Modeling and Action Learning for Digital Agents</span></h1>
       <p class="hero-subtitle">Let digital agents understand the environment before taking action. WIA unifies seven digital worlds and uses a foundational world model for state prediction, simulated training, and proactive decisions.</p>
       <div class="hero-actions">
+        <a class="btn btn-primary" href="#overview" data-i18n="index.promo.watch">Watch Overview</a>
         <a class="btn btn-light" href="demos.html" data-i18n="nav.view_demos">Watch Demos</a>
         <a class="btn btn-outline-light" href="#resources" data-i18n="index.hero.explore">Explore Resources</a>
       </div>
       <div class="hero-note">WIA-Corpus · WIA-Bench · WIA-WM · WIA-WAM</div>
     </div>
   </header>
+
+  <section class="section promo-section" id="overview" aria-labelledby="promoTitle">
+    <div class="wrap promo-wrap">
+      <div class="section-head">
+        <div class="kicker" data-i18n="index.promo.kicker">Project Overview</div>
+        <h2 id="promoTitle" data-i18n="index.promo.title">Watch WIA in Action</h2>
+        <p data-i18n="index.promo.desc">Discover how WIA unifies world modeling and action learning across seven digital environments.</p>
+      </div>
+      <div class="video-frame">
+        <video id="promoVideo" controls playsinline preload="metadata" poster="demos/WIA_cover_1920x1080.png" aria-labelledby="promoTitle">
+          <source src="demos/WIA_promo_1080p.mp4" type="video/mp4" />
+          <p><span data-i18n="index.promo.fallback">Your browser does not support embedded video.</span> <a href="demos/WIA_promo_1080p.mp4" download data-i18n="index.promo.download">Download the overview video</a></p>
+        </video>
+      </div>
+      <p class="promo-note" data-i18n="index.promo.note">1080p · English narration with subtitles · 2 min 35 sec</p>
+    </div>
+  </section>
 
 <section class="section" id="resources">
     <div class="wrap">
@@ -76,7 +94,7 @@
         <article class="resource-card">
           <svg class="resource-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3.8423 0a1.0037 1.0037 0 0 0-.922.6078c-.1536.3687-.0438.6275.2938 1.1113l6.9185 8.3597-1.0223 1.1058a1.0393 1.0393 0 0 0 .003 1.4229l1.2292 1.3135-5.4391 6.4444c-.2803.299-.4538.823-.2971 1.1986a1.0253 1.0253 0 0 0 .9585.635.9133.9133 0 0 0 .6891-.3405l5.783-6.126 7.4902 8.0051a.8527.8527 0 0 0 .6835.2597.9575.9575 0 0 0 .8777-.6138c.1577-.377-.017-.7502-.306-1.1407l-7.0518-8.3418 1.0632-1.13a.9626.9626 0 0 0 .0089-1.3165L4.6336.4639s-.3733-.4535-.768-.463zm0 .272h.0166c.2179.0052.4874.2715.5644.3639l.005.006.0052.0055 10.169 10.9905a.6915.6915 0 0 1-.0072.945l-1.0666 1.133-1.4982-1.7724-8.5994-10.39c-.3286-.472-.352-.6183-.2592-.841a.7307.7307 0 0 1 .6704-.4401Zm14.341 1.5701a.877.877 0 0 0-.6554.2418l-5.6962 6.1584 1.6944 1.8319 5.3089-6.5138c.3251-.4335.479-.6603.3247-1.0292a1.1205 1.1205 0 0 0-.9763-.689zm-7.6557 12.2823 1.3186 1.4135-5.7864 6.1295a.6494.6494 0 0 1-.4959.26.7516.7516 0 0 1-.706-.4669c-.1119-.2682.0359-.6864.2442-.9083l.0051-.0055.0047-.0055z"/></svg>
           <h3>Paper</h3>
-          <p data-i18n="index.resources.paper.desc">Paper link</p>
+          <p lang="en" data-i18n="index.resources.paper.desc">World Intelligence Agent: Unifying World Modeling and Action Learning for Digital Agents</p>
           <a class="btn btn-ghost" href="https://github.com/Darwin-Agent/WIA/tree/main/paper/Tech_Report__WAM" target="_blank" rel="noopener noreferrer" data-i18n="index.resources.paper.link">Technical Report</a>
         </article>
       </div>
@@ -195,32 +213,33 @@
             <tr class="group"><td colspan="10">Proprietary</td></tr>
             <tr><td>GPT-5.6-luna</td><td>48.37</td><td>44.51</td><td>54.96</td><td>40.01</td><td>55.88</td><td>62.42</td><td>53.87</td><td>51.91</td><td>51.43</td></tr>
             <tr><td>GPT-5.6-terra</td><td>48.34</td><td>43.55</td><td>56.14</td><td>40.46</td><td>57.68</td><td>61.79</td><td>54.57</td><td>52.38</td><td>51.79</td></tr>
-            <tr><td>GPT-5.6-sol</td><td class="second">49.39</td><td>45.75</td><td>59.70</td><td>39.99</td><td>58.61</td><td>63.63</td><td>55.00</td><td>53.58</td><td>53.15</td></tr>
+            <tr><td>GPT-5.6-sol</td><td>49.39</td><td>45.75</td><td>59.70</td><td>39.99</td><td>58.61</td><td class="second">63.63</td><td>55.00</td><td>53.58</td><td>53.15</td></tr>
             <tr><td>Claude-Sonnet-5</td><td>47.76</td><td>49.85</td><td>63.22</td><td>35.26</td><td>44.58</td><td>46.65</td><td>54.24</td><td>48.03</td><td>48.79</td></tr>
             <tr><td>Claude-Opus-4.8</td><td>48.98</td><td class="best">53.97</td><td>63.02</td><td>39.10</td><td>58.15</td><td>57.93</td><td class="second">55.26</td><td>53.40</td><td>53.77</td></tr>
             <tr class="group"><td colspan="10">Open-source</td></tr>
             <tr><td>GLM-5.3</td><td>47.20</td><td>50.23</td><td>55.58</td><td>31.10</td><td>32.68</td><td>53.88</td><td>51.03</td><td>44.98</td><td>45.96</td></tr>
             <tr><td>Kimi-K3</td><td>50.50</td><td>38.74</td><td>63.05</td><td>41.25</td><td>56.67</td><td>62.75</td><td>53.48</td><td>53.19</td><td>52.35</td></tr>
             <tr><td>Qwen3.8-27B</td><td>41.08</td><td>39.40</td><td>53.34</td><td>34.88</td><td>48.47</td><td>51.84</td><td>47.51</td><td>45.46</td><td>45.22</td></tr>
-            <tr><td>Qwen3.8-max</td><td>47.60</td><td>45.32</td><td>57.97</td><td>36.82</td><td>57.62</td><td class="second">63.42</td><td class="best">55.48</td><td>52.40</td><td>52.03</td></tr>
+            <tr><td>Qwen3.8-max</td><td>47.60</td><td>45.32</td><td>57.97</td><td>36.82</td><td>57.62</td><td>63.42</td><td class="best">55.48</td><td>52.40</td><td>52.03</td></tr>
             <tr><td>DeepSeek-V4-Flash</td><td>46.74</td><td>44.46</td><td>58.93</td><td>38.40</td><td>50.51</td><td>55.53</td><td>50.77</td><td>49.40</td><td>49.33</td></tr>
             <tr><td>DeepSeek-V4-Pro</td><td>47.87</td><td>43.92</td><td>61.93</td><td>38.77</td><td>51.14</td><td>57.77</td><td>52.63</td><td>50.73</td><td>50.57</td></tr>
             <tr class="group"><td colspan="10">Qwen3.5</td></tr>
             <tr><td>Qwen3.5-4B</td><td>39.92</td><td>38.38</td><td>55.29</td><td>30.44</td><td>37.26</td><td>39.50</td><td>45.24</td><td>40.46</td><td>40.86</td></tr>
             <tr><td>Qwen3.5-9B</td><td>43.00</td><td>41.37</td><td>58.19</td><td>30.99</td><td>44.05</td><td>43.81</td><td>47.42</td><td>43.76</td><td>44.12</td></tr>
-            <tr><td>Qwen3.5-27B</td><td>47.84</td><td>42.56</td><td class="best">64.29</td><td>33.75</td><td>48.10</td><td>55.09</td><td>52.78</td><td>49.15</td><td>49.20</td></tr>
+            <tr><td>Qwen3.5-27B</td><td>47.84</td><td>42.56</td><td class="second">64.29</td><td>33.75</td><td>48.10</td><td>55.09</td><td>52.78</td><td>49.15</td><td>49.20</td></tr>
             <tr><td>Qwen3.5-35B-A3B</td><td>47.09</td><td>42.69</td><td>56.59</td><td>32.03</td><td>45.70</td><td>49.80</td><td>49.55</td><td>46.01</td><td>46.21</td></tr>
-            <tr><td>Qwen-AgentWorld</td><td>47.43</td><td>42.63</td><td class="second">64.21</td><td>45.02</td><td>56.31</td><td>57.22</td><td>53.68</td><td>52.87</td><td>52.36</td></tr>
+            <tr><td>Qwen-AgentWorld</td><td>47.43</td><td>42.63</td><td>64.21</td><td>45.02</td><td>56.31</td><td>57.22</td><td>53.68</td><td>52.87</td><td>52.36</td></tr>
             <tr><td>Qwen3.5-122B-A10B</td><td>43.92</td><td>32.43</td><td>41.86</td><td>34.93</td><td>48.65</td><td>55.70</td><td>44.15</td><td>44.07</td><td>43.09</td></tr>
             <tr class="group"><td colspan="10">Ours</td></tr>
-            <tr class="ours"><td class="model-name">WIA-WM-4B</td><td>27.19</td><td>44.10</td><td>48.40</td><td>36.84</td><td class="second">60.06</td><td>55.87</td><td>49.27</td><td>46.34</td><td>45.96</td></tr>
+            <tr class="ours"><td class="model-name">WIA-WM-4B</td><td>27.19</td><td>44.10</td><td>48.40</td><td>36.84</td><td>60.06</td><td>55.87</td><td>49.27</td><td>46.34</td><td>45.96</td></tr>
             <tr class="ours"><td class="model-name">WIA-WM-9B</td><td>46.82</td><td>52.12</td><td>62.70</td><td>46.06</td><td class="best">60.77</td><td>59.38</td><td>53.43</td><td>54.49</td><td>54.47</td></tr>
-            <tr class="ours"><td class="model-name">WIA-WM-27B</td><td class="second">50.51</td><td class="second">52.53</td><td>63.42</td><td class="second">46.36</td><td>59.92</td><td>60.73</td><td>54.52</td><td class="second">55.45</td><td class="second">55.43</td></tr>
-            <tr class="ours"><td class="model-name">WIA-WM-35B-A3B</td><td>48.76</td><td>43.72</td><td>63.86</td><td class="second">51.33</td><td>59.19</td><td>62.52</td><td>54.95</td><td>55.72</td><td>54.90</td></tr>
+            <tr class="ours"><td class="model-name">WIA-WM-27B</td><td class="second">50.51</td><td class="second">52.53</td><td>63.42</td><td>46.36</td><td>59.92</td><td>60.73</td><td>54.52</td><td>55.45</td><td class="second">55.43</td></tr>
+            <tr class="ours"><td class="model-name">WIA-WM-35B-A3B</td><td>48.76</td><td>43.72</td><td>63.86</td><td class="second">51.33</td><td>59.19</td><td>62.52</td><td>54.95</td><td class="second">55.72</td><td>54.90</td></tr>
             <tr class="ours"><td class="model-name">WIA-WM-122B-A10B</td><td class="best">50.59</td><td>40.00</td><td class="best">64.71</td><td class="best">58.18</td><td class="second">60.46</td><td class="best">64.62</td><td>53.59</td><td class="best">57.35</td><td class="best">56.02</td></tr>
           </tbody>
         </table>
       </div>
+      <p class="table-note" data-i18n="index.results.note">Red: highest score in each column. Blue: second-highest score. Tied scores share the same rank.</p>
     </div>
   </section>
 

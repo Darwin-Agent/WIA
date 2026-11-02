@@ -9,6 +9,7 @@
   --brand-2: #ff8d3a;
   --green: #16a34a;
   --red: #dc2626;
+  --blue: #2563eb;
   --amber: #d97706;
   --accent-soft: #fff0e6;
   --radius: 20px;
@@ -97,6 +98,11 @@ button { font: inherit; cursor: pointer; }
   background: linear-gradient(90deg, #ff8d3a, #ff6900, #ffb27a);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
+.hero-paper-subtitle {
+  display: block; max-width: 820px; margin: 24px auto 0;
+  font-size: clamp(24px, 3.4vw, 36px); font-weight: 650;
+  line-height: 1.25; letter-spacing: -.025em;
+}
 .hero-subtitle { font-size: 20px; color: var(--muted); margin: 22px auto 30px; max-width: 760px; line-height: 1.7; }
 .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 .hero-note { margin-top: 22px; color: var(--muted); font-size: 12px; letter-spacing: .05em; }
@@ -108,6 +114,10 @@ button { font: inherit; cursor: pointer; }
 .section-head h2 { margin: 10px 0 14px; font-size: clamp(32px, 5vw, 48px); letter-spacing: -.04em; line-height: 1.03; }
 
 .section-head p { margin: 0; color: var(--muted); font-size: 17px; line-height: 1.7; }
+.promo-section { padding-top: 52px; scroll-margin-top: 90px; }
+.promo-wrap { max-width: 960px; }
+.promo-section .section-head { margin-bottom: 28px; }
+.promo-note { margin: 16px 0 0; text-align: center; color: var(--muted); font-size: 13px; }
 
 .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 .stat-card {
@@ -157,8 +167,8 @@ tr:last-child td { border-bottom: 0; }
 .metric-good { color: var(--green); font-weight: 750; }
 .result-table { min-width: 940px; }
 .result-table .group td { background: #fafafa; color: #4b5563; font-weight: 750; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
-.result-table .best { background: #ffe3e3; font-weight: 800; }
-.result-table .second { background: #e3f0ff; font-weight: 700; }
+.result-table .best { background: #ffe3e3; color: var(--red); font-weight: 800; }
+.result-table .second { background: #e3f0ff; color: var(--blue); font-weight: 700; }
 .result-table .ours td { background: #f1f1f8; }
 .result-table .ours .model-name { font-weight: 800; }
 .result-table .ours td.best { background: #ffe3e3; font-weight: 800; }
