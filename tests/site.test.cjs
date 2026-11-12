@@ -10,6 +10,24 @@ const paperTitle = 'World Intelligence Agent: Unifying World Modeling and Action
 const messages = JSON.parse(read('i18n.js').match(/const MESSAGES = (\{[\s\S]*?\n\});/)[1]);
 const text = value => value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 
+test('OOD scores match all 198 values in the November 12 Pro-judge report table', () => {
+  const expected = JSON.parse(read('tests/fixtures/pro-ood-20261112.json'));
+  const table = html.match(/<table class="result-table">([\s\S]*?)<\/table>/)[1];
+  const headers = [...table.matchAll(/<th>(.*?)<\/th>/g)].map(match => text(match[1]));
+  assert.deepEqual(headers.slice(1), expected.columns);
+  const rows = [...table.matchAll(/<tr\b([^>]*)>([\s\S]*?)<\/tr>/g)]
+    .filter(match => !/class="group"/.test(match[1]) && /<td\b/.test(match[2]))
+    .map(match => {
+      const cells = [...match[2].matchAll(/<td\b[^>]*>(.*?)<\/td>/g)]
+        .map(cell => text(cell[1]));
+      return { model: cells[0], scores: cells.slice(1) };
+    });
+  assert.equal(rows.length, 22);
+  assert.deepEqual(rows, expected.rows);
+  assert.match(messages.en['index.results.source'], /DeepSeek-V4-Pro/);
+  assert.match(messages.zh['index.results.source'], /DeepSeek-V4-Pro/);
+});
+
 test('every score column highlights only the highest and second-highest distinct scores', () => {
   const tables = [...html.matchAll(/<table class="result-table">([\s\S]*?)<\/table>/g)];
   assert.ok(tables.length > 0);
