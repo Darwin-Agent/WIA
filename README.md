@@ -9,8 +9,27 @@ This repository provides continual pretraining, supervised fine-tuning, Miles-ba
 reward services, and domain-aware evaluation in one source release.
 
 <p align="center">
-  <a href="https://darwin-agent.github.io/WIA/"><img alt="Homepage" src="https://img.shields.io/badge/Homepage-WIA-ff6900?style=flat"/></a>
+  <a href="https://darwin-agent.github.io/WIA/">
+    <img alt="Homepage" src="https://img.shields.io/badge/WIA-Homepage-2563EB?style=for-the-badge"/>
+  </a>
+  &nbsp;
+  <a href="https://www.alphaxiv.org/abs/2611.world-intelligence-agent-world-modeling">
+    <img alt="Paper" src="https://img.shields.io/badge/WIA-Paper-7C3AED?style=for-the-badge"/>
+  </a>
+  &nbsp;
+  <a href="https://github.com/Darwin-Agent/WIA">
+    <img alt="Code" src="https://img.shields.io/badge/WIA-Code-181717?style=for-the-badge"/>
+  </a>
+  &nbsp;
+  <a href="https://huggingface.co/collections/darwinagent/wia-models">
+    <img alt="Models" src="https://img.shields.io/badge/WIA-Models-047857?style=for-the-badge"/>
+  </a>
+  &nbsp;
+  <a href="https://huggingface.co/collections/LightningCreeper/wia-datasets">
+    <img alt="Datasets" src="https://img.shields.io/badge/WIA-Datasets-C2410C?style=for-the-badge"/>
+  </a>
 </p>
+
 
 [Quick start](#quick-start) · [Installation](ENVIRONMENT.md) · [Model configurations](#models-and-resources) ·
 [Configuration reference](docs/CONFIGURATION.md) · [Services](#required-services) · [Documentation](docs/README.md)
@@ -191,3 +210,15 @@ The [configuration reference](docs/CONFIGURATION.md) includes default expression
 - Restrict Ray dashboards and scorer endpoints to trusted networks.
 - Never commit datasets, weights, logs, responses, host inventories or secrets; ignore rules do not replace a privacy review.
 - Third-party frameworks, models and datasets have their own terms. Check their permissions before use.
+
+---
+
+```bibtex
+@misc{2611.world-intelligence-agent-world-modeling,
+title={World Intelligence Agent: Unifying World Modeling and Action Learning for Digital Agents},
+author={Weicheng Meng and Shuo Lu and Guangzeng Han and Yuanfa Li and Yijun Liu and Kuangpu Guo and Jingyang Qiao and Yu Cheng and Yinuo Xu and Xin Wang and Wenhao Wu and Pengzhi Gao and Zihang Liu and Heng Qu and Jian Liang and Zhizhong Zhang and Yuan Xie and Jian Luan and Kun Shao},
+year={2026},
+publisher={alphaXiv},
+url={https://www.alphaxiv.org/abs/2611.world-intelligence-agent-world-modeling},
+}
+```
