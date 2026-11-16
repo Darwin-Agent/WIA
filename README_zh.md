@@ -9,7 +9,25 @@
 监督微调和基于 Miles 的异步 GSPO，评测使用独立 LLM judge 对照真实反馈评分。
 
 <p align="center">
-  <a href="https://darwin-agent.github.io/WIA/"><img alt="Homepage" src="https://img.shields.io/badge/Homepage-WIA-ff6900?style=flat"/></a>
+  <a href="https://darwin-agent.github.io/WIA/">
+    <img alt="Homepage" src="https://img.shields.io/badge/WIA-Homepage-2563EB?style=for-the-badge"/>
+  </a>
+  &nbsp;
+  <a href="https://www.alphaxiv.org/abs/2611.world-intelligence-agent-world-modeling">
+    <img alt="Paper" src="https://img.shields.io/badge/WIA-Paper-7C3AED?style=for-the-badge"/>
+  </a>
+  &nbsp;
+  <a href="https://github.com/Darwin-Agent/WIA">
+    <img alt="Code" src="https://img.shields.io/badge/WIA-Code-181717?style=for-the-badge"/>
+  </a>
+  &nbsp;
+  <a href="https://huggingface.co/collections/darwinagent/wia-models">
+    <img alt="Models" src="https://img.shields.io/badge/WIA-Models-047857?style=for-the-badge"/>
+  </a>
+  &nbsp;
+  <a href="https://huggingface.co/collections/LightningCreeper/wia-datasets">
+    <img alt="Datasets" src="https://img.shields.io/badge/WIA-Datasets-C2410C?style=for-the-badge"/>
+  </a>
 </p>
 
 [快速开始](#快速开始) · [环境安装](ENVIRONMENT_zh.md) · [并行配置](#模型与资源) ·
@@ -196,3 +214,15 @@ RL dry-run 仍需可读取的 HF `config.json`；任何 dry-run 都不证明完�
 - 服务端口只向可信网络开放；Ray dashboard、judge 与 similarity API 不应直接暴露到公网。
 - 不提交模型、数据、日志、请求响应、机器清单或凭据。忽略规则不能替代发布前的隐私检查。
 - 第三方框架、模型和数据分别受其授权条款约束；使用前自行确认许可范围。
+
+---
+
+```bibtex
+@misc{2611.world-intelligence-agent-world-modeling,
+    title={World Intelligence Agent: Unifying World Modeling and Action Learning for Digital Agents},
+    author={Weicheng Meng and Shuo Lu and Guangzeng Han and Yuanfa Li and Yijun Liu and Kuangpu Guo and Jingyang Qiao and Yu Cheng and Yinuo Xu and Xin Wang and Wenhao Wu and Pengzhi Gao and Zihang Liu and Heng Qu and Jian Liang and Zhizhong Zhang and Yuan Xie and Jian Luan and Kun Shao},
+    year={2026},
+    publisher={alphaXiv},
+    url={https://www.alphaxiv.org/abs/2611.world-intelligence-agent-world-modeling},
+}
+```
